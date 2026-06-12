@@ -29,6 +29,9 @@ export function AppProvider({ children }) {
         leadCount: (leadsByProject[project.id] || []).length,
         campaignCount: (campaignsByProject[project.id] || []).length,
         taskCount: (tasksByProject[project.id] || []).length,
+        teamCount: store.teamMembers.filter((member) =>
+          member.assignedProjectIds.includes(project.id),
+        ).length,
       })),
       getProjectBundle(projectId) {
         return {
@@ -67,11 +70,12 @@ export function AppProvider({ children }) {
           return acc;
         }, {});
         const won = statusCounts.Won || 0;
+        const pipelineValue = sum(projectLeads, (lead) => Number(lead.estimatedValue) || 0);
         return {
           total: projectLeads.length,
           statusCounts,
           conversionRate: projectLeads.length ? (won / projectLeads.length) * 100 : 0,
-          pipelineValue: sum(projectLeads, (lead) => lead.estimatedValue),
+          pipelineValue,
         };
       },
     };
@@ -148,6 +152,9 @@ export function AppProvider({ children }) {
     },
     createLead(projectId, payload) {
       const leadId = makeId("lead");
+      const estimatedValue = payload.estimatedValue.trim()
+        ? Number(payload.estimatedValue)
+        : null;
       const nextLead = {
         id: leadId,
         projectId,
@@ -157,7 +164,7 @@ export function AppProvider({ children }) {
         phone: payload.phone.trim() || "+1-555-0100",
         source: payload.source,
         status: payload.status,
-        estimatedValue: Number(payload.estimatedValue) || 0,
+        estimatedValue: Number.isFinite(estimatedValue) ? estimatedValue : null,
         capturedFrom: payload.capturedFrom.trim() || payload.source,
         assignedTeamMember: payload.assignedTeamMember,
         createdDate: new Date().toISOString().slice(0, 10),
@@ -249,6 +256,7 @@ export function AppProvider({ children }) {
             assignee: payload.assignee,
             dueDate: payload.dueDate,
             priority: payload.priority,
+            notes: payload.notes?.trim() || "",
           },
           ...current.tasks,
         ],
@@ -258,6 +266,23 @@ export function AppProvider({ children }) {
       setStore((current) => ({
         ...current,
         tasks: current.tasks.map((task) => (task.id === taskId ? { ...task, ...updates } : task)),
+      }));
+    },
+    toggleTeamMemberAssignment(projectId, memberId) {
+      setStore((current) => ({
+        ...current,
+        teamMembers: current.teamMembers.map((member) => {
+          if (member.id !== memberId) {
+            return member;
+          }
+          const assigned = member.assignedProjectIds.includes(projectId);
+          return {
+            ...member,
+            assignedProjectIds: assigned
+              ? member.assignedProjectIds.filter((item) => item !== projectId)
+              : [...member.assignedProjectIds, projectId],
+          };
+        }),
       }));
     },
     updateApprovalStatus(approvalId, status) {
@@ -288,6 +313,32 @@ export function AppProvider({ children }) {
               }
             : approval
         ),
+      }));
+    },
+    createApproval(projectId, payload) {
+      setStore((current) => ({
+        ...current,
+        approvals: [
+          {
+            id: makeId("approval"),
+            projectId,
+            title: payload.title.trim(),
+            requestType: payload.requestType,
+            type: payload.requestType,
+            thumbnailColor: payload.thumbnailColor || "#CBD5E1",
+            status: payload.status,
+            submittedBy: payload.submittedBy,
+            submittedDate: new Date().toISOString().slice(0, 10),
+            summary: payload.summary.trim(),
+            details: payload.details.trim(),
+            pros: payload.pros,
+            cons: payload.cons,
+            attachments: payload.attachments,
+            recommendation: payload.recommendation.trim(),
+            comments: [],
+          },
+          ...current.approvals,
+        ],
       }));
     },
     updateReportConfig(projectId, updater) {

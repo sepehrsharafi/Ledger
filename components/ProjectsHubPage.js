@@ -117,6 +117,11 @@ export default function ProjectsHubPage() {
                     {project.taskCount}
                   </span>{" "}
                   tasks
+                  <span className="mx-2 text-[#C2CCDD]">•</span>
+                  <span className="font-semibold text-ledger-ink">
+                    {project.teamCount}
+                  </span>{" "}
+                  people
                 </div>
                 <div className="text-[14px] font-semibold text-ledger-blue transition group-hover:translate-x-0.5">
                   Open workspace

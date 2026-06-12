@@ -10,7 +10,6 @@ import {
   BellIcon,
   ChevronDownIcon,
   NavIcon,
-  SearchIcon,
 } from "@/components/dashboard/DashboardIcons";
 
 const projectNav = [
@@ -19,13 +18,13 @@ const projectNav = [
   { href: "/campaigns", label: "Campaigns", icon: "campaigns" },
   { href: "/calendar", label: "Content Calendar", icon: "calendar" },
   { href: "/tasks", label: "Tasks", icon: "tasks" },
+  { href: "/team", label: "Team", icon: "team" },
   { href: "/approvals", label: "Approvals", icon: "approvals" },
   { href: "/reports", label: "Reports", icon: "reports" },
 ];
 
 const manageNav = [
   { href: "/projects", label: "Projects", icon: "projects" },
-  { href: "/team", label: "Team", icon: "team" },
   { href: "/settings", label: "Integrations", icon: "integrations" },
   { href: "/settings", label: "Settings", icon: "settings", adminOnly: true },
 ];
@@ -315,27 +314,6 @@ export default function AppShell({
             />
           </div>
 
-          <div className="ledger-surface mt-6 rounded-[20px] p-4">
-            <div className="flex items-center gap-2 text-[15px] font-bold text-ledger-ink">
-              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-ledger-blue text-[11px] text-white">
-                P
-              </span>
-              Pro Plan
-            </div>
-            <p className="mt-2 text-[13px] text-[#7180A0]">
-              Renews Jun 1, 2025
-            </p>
-            <div className="mt-4 h-1.5 rounded-full bg-[#E7EEF9]">
-              <div className="h-1.5 w-[75%] rounded-full bg-ledger-blue" />
-            </div>
-            <p className="mt-3 text-[13px] text-[#7180A0]">
-              75% of tasks completed
-            </p>
-            <button className="mt-4 flex w-full items-center justify-between rounded-[14px] border border-[#E3EAF7] bg-white px-3 py-2.5 text-[13px] font-semibold text-ledger-blue transition hover:bg-[#F8FAFF]">
-              <span>View Plan Details</span>
-              <span>&gt;</span>
-            </button>
-          </div>
         </aside>
 
         <div className="flex min-h-screen w-full flex-col xl:pl-[248px]">
@@ -352,16 +330,6 @@ export default function AppShell({
                   <path d="M4 7h16M4 12h16M4 17h16" strokeLinecap="round" />
                 </svg>
               </button>
-
-              <div className="flex h-[42px] min-w-[220px] flex-1 items-center gap-3 rounded-[14px] border border-[#E0E8F6] bg-white px-4 md:max-w-[480px]">
-                <SearchIcon className="h-4 w-4 text-[#8FA0BE]" />
-                <span className="flex-1 text-[14px] text-[#8FA0BE]">
-                  Search anything...
-                </span>
-                <span className="hidden text-[13px] font-medium text-[#97A5C0] md:inline">
-                  Ctrl K
-                </span>
-              </div>
 
               <div className="ml-auto flex items-center gap-3">
                 <button className="relative flex h-10 w-10 items-center justify-center rounded-full text-[#60708F] transition hover:bg-[#F4F7FF] hover:text-ledger-blue">

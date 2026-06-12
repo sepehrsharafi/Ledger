@@ -1,46 +1,182 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import AppShell from "@/components/AppShell";
 import Badge from "@/components/Badge";
 import Drawer from "@/components/Drawer";
 import { useAppContext } from "@/context/AppContext";
 
 export default function TeamPage() {
-  const { store } = useAppContext();
+  const { store, toggleTeamMemberAssignment } = useAppContext();
   const [selectedMember, setSelectedMember] = useState(null);
+  const [selectedProjectId, setSelectedProjectId] = useState(
+    store.projects[0]?.id || "",
+  );
+
+  const selectedProject = useMemo(
+    () => store.projects.find((project) => project.id === selectedProjectId),
+    [selectedProjectId, store.projects],
+  );
+
+  const assignedMembers = store.teamMembers.filter((member) =>
+    member.assignedProjectIds.includes(selectedProjectId),
+  );
+  const availableMembers = store.teamMembers.filter(
+    (member) => !member.assignedProjectIds.includes(selectedProjectId),
+  );
 
   return (
     <AppShell title="Team" subtitle="Agency capacity, ownership, and workload in one place.">
-      <div className="overflow-hidden rounded-[30px] border border-white/70 bg-white shadow-ledger-sm">
-        <div className="overflow-x-auto">
-          <table className="min-w-full text-left">
-            <thead className="border-b border-slate-100 bg-slate-50/80 text-xs uppercase tracking-[0.18em] text-slate-400">
-              <tr>
-                <th className="px-6 py-4">Name</th>
-                <th className="px-6 py-4">Email</th>
-                <th className="px-6 py-4">Role</th>
-                <th className="px-6 py-4">Assigned Projects</th>
-              </tr>
-            </thead>
-            <tbody>
-              {store.teamMembers.map((member) => (
-                <tr key={member.id} onClick={() => setSelectedMember(member)} className="cursor-pointer border-b border-slate-100 transition hover:bg-ledger-mist/50">
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-11 w-11 items-center justify-center rounded-2xl text-sm font-semibold text-white" style={{ backgroundColor: member.avatarColor }}>
-                        {member.name.split(" ").map((part) => part[0]).join("").slice(0, 2)}
-                      </div>
-                      <div className="font-medium text-ledger-ink">{member.name}</div>
+      <div className="space-y-6">
+        <div className="flex flex-wrap items-center justify-between gap-4 rounded-[24px] border border-[#E4EBF7] bg-white p-5">
+          <div>
+            <div className="text-sm uppercase tracking-[0.18em] text-[#8FA0BE]">
+              Capacity view
+            </div>
+            <div className="mt-2 text-[24px] font-bold tracking-[-0.03em] text-ledger-ink">
+              {selectedProject?.name || "Select a project"}
+            </div>
+            <div className="mt-1 text-[14px] text-slate-500">
+              Assign and unassign people against a specific project.
+            </div>
+          </div>
+          <select
+            value={selectedProjectId}
+            onChange={(event) => setSelectedProjectId(event.target.value)}
+            className="ledger-select min-w-[240px]"
+          >
+            {store.projects.map((project) => (
+              <option key={project.id} value={project.id}>
+                {project.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-3">
+          <div className="rounded-[24px] border border-[#E4EBF7] bg-white p-5">
+            <div className="text-sm text-slate-500">Assigned</div>
+            <div className="mt-3 text-3xl font-bold tracking-[-0.03em] text-ledger-ink">
+              {assignedMembers.length}
+            </div>
+          </div>
+          <div className="rounded-[24px] border border-[#E4EBF7] bg-white p-5">
+            <div className="text-sm text-slate-500">Available</div>
+            <div className="mt-3 text-3xl font-bold tracking-[-0.03em] text-ledger-ink">
+              {availableMembers.length}
+            </div>
+          </div>
+          <div className="rounded-[24px] border border-[#E4EBF7] bg-white p-5">
+            <div className="text-sm text-slate-500">Total Team</div>
+            <div className="mt-3 text-3xl font-bold tracking-[-0.03em] text-ledger-ink">
+              {store.teamMembers.length}
+            </div>
+          </div>
+        </div>
+
+        <div className="grid gap-6 xl:grid-cols-2">
+          <section className="rounded-[24px] border border-[#E4EBF7] bg-white p-5 shadow-ledger-sm">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-[18px] font-bold tracking-[-0.03em] text-ledger-ink">
+                Assigned People
+              </h2>
+              <Badge tone="Approved">On project</Badge>
+            </div>
+            <div className="space-y-3">
+              {assignedMembers.map((member) => (
+                <div
+                  key={member.id}
+                  className="flex items-center justify-between rounded-[18px] border border-[#E4EBF7] bg-[#FBFCFE] px-4 py-3"
+                >
+                  <button
+                    onClick={() => setSelectedMember(member)}
+                    className="flex items-center gap-3 text-left"
+                  >
+                    <div
+                      className="flex h-11 w-11 items-center justify-center rounded-2xl text-sm font-semibold text-white"
+                      style={{ backgroundColor: member.avatarColor }}
+                    >
+                      {member.name
+                        .split(" ")
+                        .map((part) => part[0])
+                        .join("")
+                        .slice(0, 2)}
                     </div>
-                  </td>
-                  <td className="px-6 py-4 text-sm text-slate-500">{member.email}</td>
-                  <td className="px-6 py-4"><Badge tone={member.role}>{member.role}</Badge></td>
-                  <td className="px-6 py-4 text-sm text-slate-500">{member.assignedProjectIds.length}</td>
-                </tr>
+                    <div>
+                      <div className="font-semibold text-ledger-ink">
+                        {member.name}
+                      </div>
+                      <div className="text-sm text-slate-500">
+                        {member.role} · {member.email}
+                      </div>
+                    </div>
+                  </button>
+                  <button
+                    onClick={() =>
+                      toggleTeamMemberAssignment(selectedProjectId, member.id)
+                    }
+                    className="rounded-full border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-100"
+                  >
+                    Unassign
+                  </button>
+                </div>
               ))}
-            </tbody>
-          </table>
+              {!assignedMembers.length ? (
+                <div className="rounded-[18px] bg-slate-50 px-4 py-6 text-sm text-slate-500">
+                  No one is assigned yet.
+                </div>
+              ) : null}
+            </div>
+          </section>
+
+          <section className="rounded-[24px] border border-[#E4EBF7] bg-white p-5 shadow-ledger-sm">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-[18px] font-bold tracking-[-0.03em] text-ledger-ink">
+                Available People
+              </h2>
+              <Badge tone="Draft">Ready to assign</Badge>
+            </div>
+            <div className="space-y-3">
+              {availableMembers.map((member) => (
+                <div
+                  key={member.id}
+                  className="flex items-center justify-between rounded-[18px] border border-[#E4EBF7] bg-[#FBFCFE] px-4 py-3"
+                >
+                  <button
+                    onClick={() => setSelectedMember(member)}
+                    className="flex items-center gap-3 text-left"
+                  >
+                    <div
+                      className="flex h-11 w-11 items-center justify-center rounded-2xl text-sm font-semibold text-white"
+                      style={{ backgroundColor: member.avatarColor }}
+                    >
+                      {member.name
+                        .split(" ")
+                        .map((part) => part[0])
+                        .join("")
+                        .slice(0, 2)}
+                    </div>
+                    <div>
+                      <div className="font-semibold text-ledger-ink">
+                        {member.name}
+                      </div>
+                      <div className="text-sm text-slate-500">
+                        {member.role} · {member.email}
+                      </div>
+                    </div>
+                  </button>
+                  <button
+                    onClick={() =>
+                      toggleTeamMemberAssignment(selectedProjectId, member.id)
+                    }
+                    className="rounded-full border border-ledger-blue/20 bg-[#EEF4FF] px-3 py-2 text-sm font-semibold text-ledger-blue transition hover:bg-[#DDE8FF]"
+                  >
+                    Assign
+                  </button>
+                </div>
+              ))}
+            </div>
+          </section>
         </div>
       </div>
       <Drawer open={Boolean(selectedMember)} onClose={() => setSelectedMember(null)} title={selectedMember?.name || "Member"}>

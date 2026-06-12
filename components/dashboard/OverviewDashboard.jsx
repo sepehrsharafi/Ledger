@@ -23,9 +23,9 @@ import { CalendarIcon } from "@/components/dashboard/DashboardIcons";
 import Link from "next/link";
 
 const chartPalette = {
-  leads: "#2B58E8",
-  conversions: "#20B4C7",
-  spend: "#FF7C8C",
+  leadRate: "#2B58E8",
+  conversionRate: "#20B4C7",
+  costPerLead: "#FF7C8C",
 };
 
 const donutPalette = [
@@ -253,6 +253,13 @@ export default function OverviewDashboard({ bundle, recentActivity, store }) {
     fill: donutPalette[index],
   }));
   const reportingWindow = getReportingWindow(bundle.series);
+  const performanceSeries = bundle.series.map((item) => ({
+    ...item,
+    label: monthLabel(item.month),
+    leadRate: item.spend ? (item.leads / item.spend) * 1000 : 0,
+    conversionRate: item.leads ? (item.conversions / item.leads) * 100 : 0,
+    costPerLeadRate: item.leads ? item.spend / Math.max(1, item.leads) : 0,
+  }));
   const funnelStages = [
     { label: "New", count: totalLeads, percent: "100%" },
     {
@@ -388,15 +395,15 @@ export default function OverviewDashboard({ bundle, recentActivity, store }) {
               <div className="hidden items-center gap-4 text-[13px] text-slate-500 md:flex">
                 <span className="flex items-center gap-2">
                   <span className="h-2.5 w-2.5 rounded-full bg-[#2B58E8]" />
-                  Leads
+                  Lead rate
                 </span>
                 <span className="flex items-center gap-2">
                   <span className="h-2.5 w-2.5 rounded-full bg-[#20B4C7]" />
-                  Conversions
+                  Conversion rate
                 </span>
                 <span className="flex items-center gap-2">
                   <span className="h-2.5 w-2.5 rounded-full bg-[#FF7C8C]" />
-                  Spend
+                  Cost per lead
                 </span>
               </div>
               <button className="ledger-button ledger-button-secondary h-10 rounded-[12px] px-3 text-[13px] font-medium text-[#6E7F9F]">
@@ -408,10 +415,7 @@ export default function OverviewDashboard({ bundle, recentActivity, store }) {
           <div className="h-[250px]">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart
-                data={bundle.series.map((item) => ({
-                  ...item,
-                  label: monthLabel(item.month),
-                }))}
+                data={performanceSeries}
                 margin={{ top: 10, right: 8, left: -24, bottom: 0 }}
               >
                 <defs>
@@ -437,22 +441,22 @@ export default function OverviewDashboard({ bundle, recentActivity, store }) {
                 <Tooltip />
                 <Area
                   type="monotone"
-                  dataKey="leads"
-                  stroke={chartPalette.leads}
+                  dataKey="leadRate"
+                  stroke={chartPalette.leadRate}
                   fill="url(#overviewArea)"
                   strokeWidth={2.5}
                 />
                 <Line
                   type="monotone"
-                  dataKey="conversions"
-                  stroke={chartPalette.conversions}
+                  dataKey="conversionRate"
+                  stroke={chartPalette.conversionRate}
                   strokeWidth={2.4}
                   dot={false}
                 />
                 <Line
                   type="monotone"
-                  dataKey="spend"
-                  stroke={chartPalette.spend}
+                  dataKey="costPerLeadRate"
+                  stroke={chartPalette.costPerLead}
                   strokeWidth={2.2}
                   dot={false}
                 />
@@ -640,33 +644,74 @@ export default function OverviewDashboard({ bundle, recentActivity, store }) {
             </Link>
           }
         >
-          <div className="space-y-4">
-            {bundle.tasks.slice(0, 5).map((task, index) => (
-              <div
-                key={task.id}
-                className="flex items-center justify-between gap-3"
-              >
-                <div className="flex items-center gap-3">
-                  <span className="h-5 w-5 rounded-full border border-[#D7E2F4] bg-white" />
-                  <span className="text-[14px] text-ledger-ink">
-                    {task.title}
-                  </span>
-                </div>
-                <div className="flex items-center gap-1.5 text-[13px] text-slate-500">
-                  <CalendarIcon className="h-4 w-4" />
-                  <span>
-                    {index === 0
-                      ? "Today"
-                      : index === 1
-                        ? "Tomorrow"
-                        : formatDate(task.dueDate, {
-                            month: "short",
-                            day: "numeric",
-                          })}
-                  </span>
-                </div>
-              </div>
-            ))}
+          <div className="space-y-3">
+            {bundle.tasks
+              .slice()
+              .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate))
+              .slice(0, 6)
+              .map((task, index) => {
+                const done = task.column === "Done";
+                return (
+                  <div
+                    key={task.id}
+                    className="rounded-[16px] border border-[#E6EDF8] bg-[#FBFDFF] px-4 py-3"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-start gap-3">
+                        <span
+                          className={`mt-0.5 flex h-5 w-5 items-center justify-center rounded-full border ${
+                            done
+                              ? "border-ledger-blue bg-ledger-blue text-white"
+                              : "border-[#D7E2F4] bg-white"
+                          }`}
+                        >
+                          {done ? (
+                            <svg
+                              viewBox="0 0 20 20"
+                              className="h-3.5 w-3.5"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2.2"
+                            >
+                              <path
+                                d="m5.5 10.25 2.8 2.8 6.2-6.55"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              />
+                            </svg>
+                          ) : null}
+                        </span>
+                        <div>
+                          <div
+                            className={`text-[14px] font-medium ${
+                              done ? "text-slate-400 line-through" : "text-ledger-ink"
+                            }`}
+                          >
+                            {task.title}
+                          </div>
+                          <div className="mt-1 text-[12px] text-slate-500">
+                            {task.assignee}
+                            {task.description ? ` · ${task.description}` : ""}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-[13px] text-slate-500">
+                        <CalendarIcon className="h-4 w-4" />
+                        <span>
+                          {index === 0
+                            ? "Today"
+                            : index === 1
+                              ? "Tomorrow"
+                              : formatDate(task.dueDate, {
+                                  month: "short",
+                                  day: "numeric",
+                                })}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
           </div>
         </SectionCard>
       </div>

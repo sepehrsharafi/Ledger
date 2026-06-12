@@ -21,6 +21,7 @@ import {
 import AppShell from "@/components/AppShell";
 import Badge from "@/components/Badge";
 import OverviewDashboard from "@/components/dashboard/OverviewDashboard";
+import Modal from "@/components/Modal";
 import Drawer from "@/components/Drawer";
 import EmptyState from "@/components/EmptyState";
 import { ModuleSkeleton, SkeletonBlock } from "@/components/Skeleton";
@@ -56,6 +57,10 @@ const moduleTitles = {
   tasks: {
     title: "Tasks",
     description: "Kanban workflow for project delivery.",
+  },
+  team: {
+    title: "Team",
+    description: "Project-specific ownership and capacity.",
   },
   approvals: {
     title: "Approvals",
@@ -209,6 +214,8 @@ function LeadsScreen({
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
   const [sourceFilter, setSourceFilter] = useState("All");
+  const [assigneeFilter, setAssigneeFilter] = useState("All");
+  const [draggedLeadId, setDraggedLeadId] = useState(null);
   const [selectedLead, setSelectedLead] = useState(null);
   const [note, setNote] = useState("");
   const [leadComposerOpen, setLeadComposerOpen] = useState(false);
@@ -246,6 +253,10 @@ function LeadsScreen({
       : 0,
   };
   const sources = ["All", ...new Set(bundle.leads.map((lead) => lead.source))];
+  const assignedPeople = [
+    "All",
+    ...store.teamMembers.map((member) => member.name),
+  ];
   const filtered = bundle.leads.filter((lead) => {
     const matchQuery = [lead.name, lead.company, lead.email]
       .join(" ")
@@ -253,8 +264,12 @@ function LeadsScreen({
       .includes(query.toLowerCase());
     const matchStatus = statusFilter === "All" || lead.status === statusFilter;
     const matchSource = sourceFilter === "All" || lead.source === sourceFilter;
-    return matchQuery && matchStatus && matchSource;
+    const matchAssignee =
+      assigneeFilter === "All" || lead.assignedTeamMember === assigneeFilter;
+    return matchQuery && matchStatus && matchSource && matchAssignee;
   });
+  const leadDraftIsValid =
+    leadDraft.name.trim() && leadDraft.email.trim() && leadDraft.source;
 
   function openLead(lead) {
     setSelectedLead({ ...lead });
@@ -285,7 +300,7 @@ function LeadsScreen({
               {summary.total}
             </div>
           </div>
-          {["New", "Contacted", "Qualified", "Won"].map((status) => (
+          {["New", "Contacted", "Qualified"].map((status) => (
             <div key={status} className={cn(subtlePanelClassName, "p-5")}>
               <div className="text-sm text-slate-500">{status}</div>
               <div className="mt-3 text-3xl font-bold tracking-[-0.03em] text-ledger-ink">
@@ -293,12 +308,12 @@ function LeadsScreen({
               </div>
             </div>
           ))}
-        </div>
-        <div className={cn(subtlePanelClassName, "p-4 text-sm text-slate-500")}>
-          Lead conversion rate:{" "}
-          <span className="font-semibold text-ledger-ink">
-            {summary.conversionRate.toFixed(1)}%
-          </span>
+          <div className={cn(subtlePanelClassName, "p-5")}>
+            <div className="text-sm text-slate-500">Lead conversion rate</div>
+            <div className="mt-3 text-3xl font-bold tracking-[-0.03em] text-ledger-ink">
+              {summary.conversionRate.toFixed(1)}%
+            </div>
+          </div>
         </div>
         <div className={cn(panelClassName, "space-y-3 p-4")}>
           <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
@@ -308,7 +323,7 @@ function LeadsScreen({
                   key={mode}
                   onClick={() => setView(mode)}
                   className={cn(
-                    "rounded-[12px] px-4 py-2 text-sm font-semibold transition",
+                    "rounded-xl px-4 py-2 text-sm font-semibold transition",
                     view === mode
                       ? "bg-ledger-blue text-white"
                       : "text-slate-500",
@@ -322,11 +337,11 @@ function LeadsScreen({
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Search leads..."
-              className="ledger-input min-w-[240px] flex-1"
+              className="ledger-input min-w-60 flex-1"
             />
             <button
               onClick={() => setLeadComposerOpen(true)}
-              className="ledger-button ledger-button-primary min-w-[148px]"
+              className="ledger-button ledger-button-primary min-w-37"
             >
               + New Lead
             </button>
@@ -357,9 +372,46 @@ function LeadsScreen({
               )}
             </select>
             <div className="hidden xl:block text-[13px] text-[#8FA0BE] self-center">
-              Filter by pipeline stage or source while keeping the lead list
-              searchable.
+              Filter by pipeline stage, source, or assignee. Click the avatar
+              chips to narrow the board like a Jira filter bar.
             </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {assignedPeople.map((name) => {
+              const initials =
+                name === "All"
+                  ? "ALL"
+                  : name
+                      .split(" ")
+                      .map((part) => part[0])
+                      .join("")
+                      .slice(0, 2);
+              const active = assigneeFilter === name;
+              return (
+                <button
+                  key={name}
+                  onClick={() => setAssigneeFilter(name)}
+                  className={cn(
+                    "flex items-center gap-2 rounded-full border px-3 py-2 text-[13px] font-semibold transition",
+                    active
+                      ? "border-ledger-blue bg-[#EEF4FF] text-ledger-blue"
+                      : "border-[#E3EBF7] bg-white text-[#61708E] hover:border-[#C9D8F2]",
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-bold",
+                      active
+                        ? "bg-ledger-blue text-white"
+                        : "bg-slate-100 text-slate-500",
+                    )}
+                  >
+                    {initials}
+                  </span>
+                  <span className="hidden sm:inline">{name}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
         {view === "table" ? (
@@ -427,55 +479,132 @@ function LeadsScreen({
           </div>
         ) : (
           <div className="grid gap-4 xl:grid-cols-5">
-            {allowedLeadStatuses.map((status) => (
-              <div key={status} className={cn(panelClassName, "p-4")}>
-                <div className="mb-4 flex items-center justify-between">
-                  <h3 className="font-bold tracking-[-0.02em] text-ledger-ink">
-                    {status}
-                  </h3>
-                  <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-500">
-                    {filtered.filter((lead) => lead.status === status).length}
-                  </span>
-                </div>
-                <div className="space-y-3">
-                  {filtered
-                    .filter((lead) => lead.status === status)
-                    .map((lead) => (
-                      <div
-                        key={lead.id}
-                        className="rounded-[16px] border border-[#E3EAF7] bg-[#FAFCFF] p-4"
-                      >
-                        <button
-                          onClick={() => openLead(lead)}
-                          className="w-full text-left"
-                        >
-                          <div className="font-semibold text-ledger-ink">
-                            {lead.name}
-                          </div>
-                          <div className="mt-1 text-sm text-slate-500">
-                            {lead.company}
-                          </div>
-                        </button>
-                        <div className="mt-4 flex items-center justify-between text-xs text-slate-500">
-                          <span>{lead.assignedTeamMember}</span>
-                          <span>{formatCurrency(lead.estimatedValue)}</span>
+            {allowedLeadStatuses.map((status, columnIndex) => {
+              const items = filtered.filter((lead) => lead.status === status);
+              const columnValue = items.reduce(
+                (total, lead) => total + (Number(lead.estimatedValue) || 0),
+                0,
+              );
+              return (
+                <div
+                  key={status}
+                  className={cn(
+                    panelClassName,
+                    "p-4 transition",
+                    draggedLeadId ? "border-dashed" : "",
+                  )}
+                  onDragOver={(event) => {
+                    event.preventDefault();
+                    event.dataTransfer.dropEffect = "move";
+                  }}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    const leadId =
+                      event.dataTransfer.getData("text/lead-id") ||
+                      draggedLeadId;
+                    if (leadId) {
+                      onStatusChange(leadId, status);
+                    }
+                    setDraggedLeadId(null);
+                  }}
+                >
+                  <div className="mb-3 rounded-[18px] bg-[#F7FAFF] p-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <h3 className="font-bold tracking-[-0.02em] text-ledger-ink">
+                          {status}
+                        </h3>
+                        <div className="mt-1 text-[12px] text-[#7D8EA9]">
+                          Drag cards here to update the pipeline.
                         </div>
-                        <select
-                          value={lead.status}
-                          onChange={(event) =>
-                            onStatusChange(lead.id, event.target.value)
-                          }
-                          className="ledger-select mt-4"
-                        >
-                          {allowedLeadStatuses.map((item) => (
-                            <option key={item}>{item}</option>
-                          ))}
-                        </select>
                       </div>
-                    ))}
+                      <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-[#61708E]">
+                        {items.length}
+                      </span>
+                    </div>
+                    <div className="mt-3 text-[12px] text-[#7D8EA9]">
+                      Pipeline value {formatCurrency(columnValue)}
+                    </div>
+                  </div>
+                  <div className="space-y-3">
+                    {items.map((lead, leadIndex) => {
+                      const member = store.teamMembers.find(
+                        (item) => item.name === lead.assignedTeamMember,
+                      );
+                      const initials = lead.assignedTeamMember
+                        .split(" ")
+                        .map((part) => part[0])
+                        .join("")
+                        .slice(0, 2);
+                      return (
+                        <div
+                          key={lead.id}
+                          draggable
+                          onDragStart={(event) => {
+                            setDraggedLeadId(lead.id);
+                            event.dataTransfer.setData("text/lead-id", lead.id);
+                            event.dataTransfer.effectAllowed = "move";
+                          }}
+                          onDragEnd={() => setDraggedLeadId(null)}
+                          className={cn(
+                            "rounded-[18px] border border-[#E3EAF7] bg-[#FAFCFF] p-4 transition",
+                            draggedLeadId === lead.id
+                              ? "opacity-60 shadow-[0_12px_24px_rgba(15,23,42,0.08)]"
+                              : "hover:border-[#C9D8F2] hover:shadow-[0_12px_24px_rgba(15,23,42,0.05)]",
+                            columnIndex % 2 === 0 ? "bg-[#FBFDFF]" : "",
+                          )}
+                        >
+                          <button
+                            onClick={() => openLead(lead)}
+                            className="w-full text-left"
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <div className="font-semibold text-ledger-ink">
+                                  {lead.name}
+                                </div>
+                                <div className="mt-1 text-sm text-slate-500">
+                                  {lead.company}
+                                </div>
+                              </div>
+                              <Badge tone={lead.status}>{lead.status}</Badge>
+                            </div>
+                          </button>
+                          <div className="mt-4 flex items-center justify-between text-xs text-slate-500">
+                            <div className="flex items-center gap-2">
+                              <span
+                                className="flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-bold text-white"
+                                style={{
+                                  backgroundColor:
+                                    member?.avatarColor || "#8FA0BE",
+                                }}
+                              >
+                                {initials}
+                              </span>
+                              <span>{lead.assignedTeamMember}</span>
+                            </div>
+                            <span>{formatCurrency(lead.estimatedValue)}</span>
+                          </div>
+                          <div className="mt-3 grid grid-cols-2 gap-2 text-[12px] text-[#7D8EA9]">
+                            <div className="rounded-xl bg-white px-3 py-2">
+                              Source {lead.source}
+                            </div>
+                            <div className="rounded-xl bg-white px-3 py-2">
+                              {lead.lastContactedDate
+                                ? formatDate(lead.lastContactedDate, {
+                                    month: "short",
+                                    day: "numeric",
+                                  })
+                                : "No contact"}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
@@ -500,32 +629,37 @@ function LeadsScreen({
                 </div>
               </div>
             </div>
-            <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_190px]">
-              <select
-                value={selectedLead.status}
-                onChange={(event) => {
-                  setSelectedLead((current) => ({
-                    ...current,
-                    status: event.target.value,
-                  }));
-                }}
-                className="ledger-select"
-              >
-                {allowedLeadStatuses.map((item) => (
-                  <option key={item}>{item}</option>
-                ))}
-              </select>
-              <button
-                onClick={() => {
-                  onStatusChange(selectedLead.id, selectedLead.status);
-                  onUpdateLead(selectedLead.id, {
-                    lastContactedDate: new Date().toISOString().slice(0, 10),
-                  });
-                }}
-                className="ledger-button ledger-button-primary w-full"
-              >
+            <div>
+              <div className="text-sm font-bold uppercase tracking-[0.12em] text-[#8FA0BE]">
                 Update Status
-              </button>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {allowedLeadStatuses.map((item) => (
+                  <button
+                    key={item}
+                    onClick={() => {
+                      onStatusChange(selectedLead.id, item);
+                      setSelectedLead((current) => ({
+                        ...current,
+                        status: item,
+                      }));
+                      onUpdateLead(selectedLead.id, {
+                        lastContactedDate: new Date()
+                          .toISOString()
+                          .slice(0, 10),
+                      });
+                    }}
+                    className={cn(
+                      "rounded-full border px-4 py-2 text-sm font-semibold transition",
+                      selectedLead.status === item
+                        ? "border-ledger-blue bg-[#EEF4FF] text-ledger-blue"
+                        : "border-[#E3EBF7] bg-white text-slate-500 hover:border-[#C9D8F2]",
+                    )}
+                  >
+                    {item}
+                  </button>
+                ))}
+              </div>
             </div>
             <div>
               <div className="text-sm font-bold uppercase tracking-[0.12em] text-[#8FA0BE]">
@@ -603,6 +737,11 @@ function LeadsScreen({
               <label key={key} className="text-sm font-medium text-ledger-ink">
                 <span className="mb-2 block">{label}</span>
                 <input
+                  type={key === "estimatedValue" ? "number" : "text"}
+                  min={key === "estimatedValue" ? "0" : undefined}
+                  placeholder={
+                    key === "estimatedValue" ? "Optional" : undefined
+                  }
                   value={leadDraft[key]}
                   onChange={(event) =>
                     setLeadDraft((current) => ({
@@ -670,15 +809,16 @@ function LeadsScreen({
           </div>
           <div className="flex justify-end">
             <button
+              disabled={!leadDraftIsValid}
               onClick={() => {
-                if (!leadDraft.name.trim() || !leadDraft.email.trim()) {
+                if (!leadDraftIsValid) {
                   return;
                 }
                 onCreateLead(bundle.project.id, leadDraft);
                 setLeadComposerOpen(false);
                 resetLeadDraft();
               }}
-              className="ledger-button ledger-button-primary min-w-[150px]"
+              className="ledger-button ledger-button-primary min-w-[150px] disabled:cursor-not-allowed disabled:opacity-50"
             >
               Save Lead
             </button>
@@ -692,6 +832,7 @@ function LeadsScreen({
 function CampaignsScreen({ bundle, onCreateCampaign, onUpdateCampaign }) {
   const [selectedCampaign, setSelectedCampaign] = useState(null);
   const [statusFilter, setStatusFilter] = useState("All");
+  const [channelFilter, setChannelFilter] = useState("All");
   const [sortBy, setSortBy] = useState("spent");
   const [campaignComposerOpen, setCampaignComposerOpen] = useState(false);
   const [campaignDraft, setCampaignDraft] = useState({
@@ -706,6 +847,10 @@ function CampaignsScreen({ bundle, onCreateCampaign, onUpdateCampaign }) {
     clicks: "",
     conversions: "",
   });
+  const campaignDraftIsValid =
+    campaignDraft.name.trim() &&
+    campaignDraft.startDate &&
+    campaignDraft.endDate;
 
   if (!bundle.campaigns.length) {
     return (
@@ -718,6 +863,7 @@ function CampaignsScreen({ bundle, onCreateCampaign, onUpdateCampaign }) {
 
   const visibleCampaigns = bundle.campaigns
     .filter((item) => statusFilter === "All" || item.status === statusFilter)
+    .filter((item) => channelFilter === "All" || item.channel === channelFilter)
     .slice()
     .sort((a, b) => {
       if (sortBy === "spent") {
@@ -732,24 +878,19 @@ function CampaignsScreen({ bundle, onCreateCampaign, onUpdateCampaign }) {
   return (
     <>
       <div className="space-y-6">
-        <div
-          className={cn(
-            panelClassName,
-            "flex flex-wrap items-center justify-between gap-3 p-4",
-          )}
-        >
-          <div className="grid flex-1 gap-4 md:grid-cols-4">
+        <div className={cn(panelClassName, "space-y-5 p-5")}>
+          <div className="grid gap-4 md:grid-cols-4">
             <div>
               <div className="text-sm text-slate-500">Campaigns</div>
               <div className="mt-2 text-2xl font-bold tracking-[-0.02em] text-ledger-ink">
-                {bundle.campaigns.length}
+                {visibleCampaigns.length}
               </div>
             </div>
             <div>
               <div className="text-sm text-slate-500">Budget</div>
               <div className="mt-2 text-2xl font-bold tracking-[-0.02em] text-ledger-ink">
                 {formatCurrency(
-                  bundle.campaigns.reduce((sum, item) => sum + item.budget, 0),
+                  visibleCampaigns.reduce((sum, item) => sum + item.budget, 0),
                 )}
               </div>
             </div>
@@ -757,45 +898,97 @@ function CampaignsScreen({ bundle, onCreateCampaign, onUpdateCampaign }) {
               <div className="text-sm text-slate-500">Spent</div>
               <div className="mt-2 text-2xl font-bold tracking-[-0.02em] text-ledger-ink">
                 {formatCurrency(
-                  bundle.campaigns.reduce((sum, item) => sum + item.spent, 0),
+                  visibleCampaigns.reduce((sum, item) => sum + item.spent, 0),
                 )}
               </div>
             </div>
             <div>
               <div className="text-sm text-slate-500">Conversions</div>
               <div className="mt-2 text-2xl font-bold tracking-[-0.02em] text-ledger-ink">
-                {bundle.campaigns.reduce(
+                {visibleCampaigns.reduce(
                   (sum, item) => sum + item.conversions,
                   0,
                 )}
               </div>
             </div>
           </div>
-          <div className="flex flex-wrap gap-3">
-            <select
-              value={statusFilter}
-              onChange={(event) => setStatusFilter(event.target.value)}
-              className="ledger-select min-w-[160px]"
-            >
-              {["All", "Active", "Scheduled", "Ended"].map((item) => (
-                <option key={item}>{item}</option>
-              ))}
-            </select>
-            <select
-              value={sortBy}
-              onChange={(event) => setSortBy(event.target.value)}
-              className="ledger-select min-w-[180px]"
-            >
-              <option value="spent">Sort by spent</option>
-              <option value="conversions">Sort by conversions</option>
-              <option value="name">Sort by name</option>
-            </select>
-            <button
-              onClick={() => setCampaignComposerOpen(true)}
-              className="ledger-button ledger-button-primary min-w-[164px]"
-            >
-              + New Campaign
-            </button>
+          <div className="grid gap-4 xl:grid-cols-[1.5fr_0.9fr]">
+            <div className="space-y-4 rounded-[20px] border border-[#E4EBF7] bg-[#FBFDFF] p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-sm font-semibold uppercase tracking-[0.14em] text-[#8FA0BE]">
+                    Filters
+                  </div>
+                  <div className="mt-1 text-[14px] text-[#6E7F9F]">
+                    Channel and lifecycle filters are independent from the lead
+                    board.
+                  </div>
+                </div>
+                <div className="text-[13px] text-[#8A98B3]">
+                  {visibleCampaigns.length} matching campaigns
+                </div>
+              </div>
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  {["All", "Active", "Scheduled", "Ended"].map((item) => {
+                    const active = statusFilter === item;
+                    return (
+                      <button
+                        key={item}
+                        onClick={() => setStatusFilter(item)}
+                        className={cn(
+                          "rounded-full border px-4 py-2 text-sm font-semibold transition",
+                          active
+                            ? "border-ledger-blue bg-[#EEF4FF] text-ledger-blue"
+                            : "border-[#E3EBF7] bg-white text-slate-500 hover:border-[#C9D8F2]",
+                        )}
+                      >
+                        {item}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  {[
+                    "All",
+                    ...new Set(bundle.campaigns.map((item) => item.channel)),
+                  ].map((item) => {
+                    const active = channelFilter === item;
+                    return (
+                      <button
+                        key={item}
+                        onClick={() => setChannelFilter(item)}
+                        className={cn(
+                          "rounded-full border px-4 py-2 text-sm font-semibold transition",
+                          active
+                            ? "border-ledger-blue bg-[#EEF4FF] text-ledger-blue"
+                            : "border-[#E3EBF7] bg-white text-slate-500 hover:border-[#C9D8F2]",
+                        )}
+                      >
+                        {item}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+            <div className="space-y-3 rounded-[20px] border border-[#E4EBF7] bg-white p-4">
+              <select
+                value={sortBy}
+                onChange={(event) => setSortBy(event.target.value)}
+                className="ledger-select w-full"
+              >
+                <option value="spent">Sort by spent</option>
+                <option value="conversions">Sort by conversions</option>
+                <option value="name">Sort by name</option>
+              </select>
+              <button
+                onClick={() => setCampaignComposerOpen(true)}
+                className="ledger-button ledger-button-primary w-full"
+              >
+                + New Campaign
+              </button>
+            </div>
           </div>
         </div>
         <div className={cn(panelClassName, "overflow-hidden")}>
@@ -1000,7 +1193,11 @@ function CampaignsScreen({ bundle, onCreateCampaign, onUpdateCampaign }) {
             </div>
             <div className="flex justify-end">
               <button
+                disabled={!String(selectedCampaign.name).trim()}
                 onClick={() => {
+                  if (!String(selectedCampaign.name).trim()) {
+                    return;
+                  }
                   onUpdateCampaign(selectedCampaign.id, {
                     name: selectedCampaign.name,
                     status: selectedCampaign.status,
@@ -1008,7 +1205,7 @@ function CampaignsScreen({ bundle, onCreateCampaign, onUpdateCampaign }) {
                   });
                   setSelectedCampaign(null);
                 }}
-                className="ledger-button ledger-button-primary min-w-[160px]"
+                className="ledger-button ledger-button-primary min-w-[160px] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Save Campaign
               </button>
@@ -1120,14 +1317,15 @@ function CampaignsScreen({ bundle, onCreateCampaign, onUpdateCampaign }) {
         </div>
         <div className="mt-5 flex justify-end">
           <button
+            disabled={!campaignDraftIsValid}
             onClick={() => {
-              if (!campaignDraft.name.trim()) {
+              if (!campaignDraftIsValid) {
                 return;
               }
               onCreateCampaign(bundle.project.id, campaignDraft);
               setCampaignComposerOpen(false);
             }}
-            className="ledger-button ledger-button-primary min-w-[160px]"
+            className="ledger-button ledger-button-primary min-w-[160px] disabled:cursor-not-allowed disabled:opacity-50"
           >
             Save Campaign
           </button>
@@ -1140,6 +1338,7 @@ function CampaignsScreen({ bundle, onCreateCampaign, onUpdateCampaign }) {
 function CalendarScreen({ bundle, onCreateEvent, onUpdateEvent, store }) {
   const [monthOffset, setMonthOffset] = useState(0);
   const [selectedEvent, setSelectedEvent] = useState(null);
+  const [selectedDay, setSelectedDay] = useState(null);
   const [eventComposerOpen, setEventComposerOpen] = useState(false);
   const [eventDraft, setEventDraft] = useState({
     title: "",
@@ -1148,6 +1347,7 @@ function CalendarScreen({ bundle, onCreateEvent, onUpdateEvent, store }) {
     status: "Draft",
     assignee: store.teamMembers[0]?.name || "Alex Morgan",
   });
+  const eventDraftIsValid = eventDraft.title.trim() && eventDraft.date;
 
   if (!bundle.events.length) {
     return (
@@ -1186,6 +1386,14 @@ function CalendarScreen({ bundle, onCreateEvent, onUpdateEvent, store }) {
 
   return (
     <>
+      <div className="mb-5 flex justify-end">
+        <button
+          onClick={() => setEventComposerOpen(true)}
+          className="ledger-button ledger-button-primary min-w-[194px]"
+        >
+          + Add Calendar Item
+        </button>
+      </div>
       <div className={cn(panelClassName, "p-6")}>
         <div className="mb-6 flex items-center justify-between">
           <button
@@ -1204,14 +1412,6 @@ function CalendarScreen({ bundle, onCreateEvent, onUpdateEvent, store }) {
             Next
           </button>
         </div>
-        <div className="mb-5 flex justify-end">
-          <button
-            onClick={() => setEventComposerOpen(true)}
-            className="ledger-button ledger-button-primary min-w-[194px]"
-          >
-            + Add Calendar Item
-          </button>
-        </div>
         <div className="grid grid-cols-7 gap-3 text-xs uppercase tracking-[0.2em] text-slate-400">
           {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
             <div key={day} className="px-2">
@@ -1225,6 +1425,7 @@ function CalendarScreen({ bundle, onCreateEvent, onUpdateEvent, store }) {
             const dayEvents = bundle.events.filter(
               (event) => event.date === dateKey,
             );
+            const hasMultiple = dayEvents.length > 1;
             return (
               <div
                 key={index}
@@ -1232,23 +1433,59 @@ function CalendarScreen({ bundle, onCreateEvent, onUpdateEvent, store }) {
               >
                 {day ? (
                   <>
-                    <div className="text-sm font-medium text-ledger-ink">
-                      {day.getDate()}
+                    <div className="flex items-center justify-between">
+                      <div className="text-sm font-medium text-ledger-ink">
+                        {day.getDate()}
+                      </div>
+                      {hasMultiple ? (
+                        <button
+                          onClick={() =>
+                            setSelectedDay({
+                              dateLabel: formatDate(day, {
+                                month: "long",
+                                day: "numeric",
+                              }),
+                              events: dayEvents,
+                            })
+                          }
+                          className="rounded-full bg-ledger-blue px-2.5 py-1 text-[11px] font-bold text-white"
+                        >
+                          {dayEvents.length} items
+                        </button>
+                      ) : null}
                     </div>
                     <div className="mt-3 space-y-2">
-                      {dayEvents.map((event) => (
+                      {!hasMultiple
+                        ? dayEvents.map((event) => (
+                            <button
+                              key={event.id}
+                              onClick={() => setSelectedEvent({ ...event })}
+                              className="w-full rounded-[12px] px-3 py-2 text-left text-xs font-semibold text-white"
+                              style={{
+                                backgroundColor:
+                                  channelColors[event.channel] || "#2B58E8",
+                              }}
+                            >
+                              {event.title}
+                            </button>
+                          ))
+                        : null}
+                      {hasMultiple ? (
                         <button
-                          key={event.id}
-                          onClick={() => setSelectedEvent({ ...event })}
-                          className="w-full rounded-[12px] px-3 py-2 text-left text-xs font-semibold text-white"
-                          style={{
-                            backgroundColor:
-                              channelColors[event.channel] || "#2B58E8",
-                          }}
+                          onClick={() =>
+                            setSelectedDay({
+                              dateLabel: formatDate(day, {
+                                month: "long",
+                                day: "numeric",
+                              }),
+                              events: dayEvents,
+                            })
+                          }
+                          className="w-full rounded-[12px] border border-dashed border-[#C7D7F3] bg-white px-3 py-2 text-left text-xs font-semibold text-ledger-ink"
                         >
-                          {event.title}
+                          View all {dayEvents.length} items
                         </button>
-                      ))}
+                      ) : null}
                     </div>
                   </>
                 ) : null}
@@ -1257,6 +1494,43 @@ function CalendarScreen({ bundle, onCreateEvent, onUpdateEvent, store }) {
           })}
         </div>
       </div>
+      <Modal
+        open={Boolean(selectedDay)}
+        onClose={() => setSelectedDay(null)}
+        title={selectedDay?.dateLabel || "Day items"}
+      >
+        {selectedDay ? (
+          <div className="space-y-3">
+            <p className="text-sm text-slate-500">
+              Select an item below to open the event editor.
+            </p>
+            <div className="space-y-3">
+              {selectedDay.events.map((event) => (
+                <button
+                  key={event.id}
+                  onClick={() => {
+                    setSelectedEvent({ ...event });
+                    setSelectedDay(null);
+                  }}
+                  className="w-full rounded-[16px] border border-[#E4EBF7] bg-[#FBFDFF] p-4 text-left transition hover:-translate-y-0.5 hover:shadow-[0_12px_24px_rgba(15,23,42,0.06)]"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-[15px] font-semibold text-ledger-ink">
+                        {event.title}
+                      </div>
+                      <div className="mt-1 text-sm text-slate-500">
+                        {event.channel} · {event.assignee}
+                      </div>
+                    </div>
+                    <Badge tone={event.status}>{event.status}</Badge>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
+      </Modal>
       <Drawer
         open={Boolean(selectedEvent)}
         onClose={() => setSelectedEvent(null)}
@@ -1354,11 +1628,15 @@ function CalendarScreen({ bundle, onCreateEvent, onUpdateEvent, store }) {
             ) : null}
             <div className="flex justify-end">
               <button
+                disabled={!String(selectedEvent.title).trim()}
                 onClick={() => {
+                  if (!String(selectedEvent.title).trim()) {
+                    return;
+                  }
                   onUpdateEvent(selectedEvent.id, selectedEvent);
                   setSelectedEvent(null);
                 }}
-                className="ledger-button ledger-button-primary min-w-[150px]"
+                className="ledger-button ledger-button-primary min-w-[150px] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Save Item
               </button>
@@ -1453,14 +1731,15 @@ function CalendarScreen({ bundle, onCreateEvent, onUpdateEvent, store }) {
         </div>
         <div className="mt-5 flex justify-end">
           <button
+            disabled={!eventDraftIsValid}
             onClick={() => {
-              if (!eventDraft.title.trim()) {
+              if (!eventDraftIsValid) {
                 return;
               }
               onCreateEvent(bundle.project.id, eventDraft);
               setEventComposerOpen(false);
             }}
-            className="ledger-button ledger-button-primary min-w-[150px]"
+            className="ledger-button ledger-button-primary min-w-[150px] disabled:cursor-not-allowed disabled:opacity-50"
           >
             Save Item
           </button>
@@ -1478,6 +1757,7 @@ function TasksScreen({
   store,
 }) {
   const [draggedTaskId, setDraggedTaskId] = useState(null);
+  const [assigneeFilter, setAssigneeFilter] = useState("All");
   const [selectedTask, setSelectedTask] = useState(null);
   const [taskComposerOpen, setTaskComposerOpen] = useState(false);
   const [taskDraft, setTaskDraft] = useState({
@@ -1488,6 +1768,7 @@ function TasksScreen({
     dueDate: inputDateValue(),
     priority: "Medium",
   });
+  const taskDraftIsValid = taskDraft.title.trim() && taskDraft.dueDate;
 
   if (!bundle.tasks.length) {
     return (
@@ -1497,6 +1778,15 @@ function TasksScreen({
       />
     );
   }
+
+  const taskAssignees = [
+    "All",
+    ...store.teamMembers.map((member) => member.name),
+  ];
+  const visibleTasks =
+    assigneeFilter === "All"
+      ? bundle.tasks
+      : bundle.tasks.filter((task) => task.assignee === assigneeFilter);
 
   return (
     <>
@@ -1522,6 +1812,43 @@ function TasksScreen({
           >
             New Task
           </button>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {taskAssignees.map((name) => {
+            const initials =
+              name === "All"
+                ? "ALL"
+                : name
+                    .split(" ")
+                    .map((part) => part[0])
+                    .join("")
+                    .slice(0, 2);
+            const active = assigneeFilter === name;
+            return (
+              <button
+                key={name}
+                onClick={() => setAssigneeFilter(name)}
+                className={cn(
+                  "flex items-center gap-2 rounded-full border px-3 py-2 text-[13px] font-semibold transition",
+                  active
+                    ? "border-ledger-blue bg-[#EEF4FF] text-ledger-blue"
+                    : "border-[#E3EBF7] bg-white text-[#61708E] hover:border-[#C9D8F2]",
+                )}
+              >
+                <span
+                  className={cn(
+                    "flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-bold",
+                    active
+                      ? "bg-ledger-blue text-white"
+                      : "bg-slate-100 text-slate-500",
+                  )}
+                >
+                  {initials}
+                </span>
+                <span className="hidden sm:inline">{name}</span>
+              </button>
+            );
+          })}
         </div>
 
         <div className="grid gap-4 xl:grid-cols-4">
@@ -1552,7 +1879,7 @@ function TasksScreen({
                   {column}
                 </h3>
                 <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-500">
-                  {bundle.tasks.filter((task) => task.column === column).length}
+                  {visibleTasks.filter((task) => task.column === column).length}
                 </span>
               </div>
               <div className="mb-4 text-[13px] text-[#8A98B3]">
@@ -1561,6 +1888,11 @@ function TasksScreen({
               <div className="space-y-3">
                 {bundle.tasks
                   .filter((task) => task.column === column)
+                  .filter(
+                    (task) =>
+                      assigneeFilter === "All" ||
+                      task.assignee === assigneeFilter,
+                  )
                   .map((task) => (
                     <div
                       key={task.id}
@@ -1720,11 +2052,15 @@ function TasksScreen({
             </label>
             <div className="sm:col-span-2 flex justify-end">
               <button
+                disabled={!String(selectedTask.title).trim()}
                 onClick={() => {
+                  if (!String(selectedTask.title).trim()) {
+                    return;
+                  }
                   onUpdateTask(selectedTask.id, selectedTask);
                   setSelectedTask(null);
                 }}
-                className="ledger-button ledger-button-primary min-w-[150px]"
+                className="ledger-button ledger-button-primary min-w-[150px] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Save Task
               </button>
@@ -1833,12 +2169,13 @@ function TasksScreen({
           </label>
           <div className="sm:col-span-2 flex justify-end">
             <button
+              disabled={!taskDraftIsValid}
               onClick={() => {
-                if (!taskDraft.title.trim()) return;
+                if (!taskDraftIsValid) return;
                 onCreateTask(bundle.project.id, taskDraft);
                 setTaskComposerOpen(false);
               }}
-              className="ledger-button ledger-button-primary min-w-[150px]"
+              className="ledger-button ledger-button-primary min-w-[150px] disabled:cursor-not-allowed disabled:opacity-50"
             >
               Save Task
             </button>
@@ -1936,6 +2273,431 @@ function ApprovalsScreen({ bundle, onStatusChange, onComment }) {
         </div>
       ))}
     </div>
+  );
+}
+
+function ApprovalWorkbench({
+  bundle,
+  onStatusChange,
+  onComment,
+  onCreateApproval,
+  store,
+}) {
+  const [selectedApproval, setSelectedApproval] = useState(null);
+  const [activeCommentId, setActiveCommentId] = useState("");
+  const [draft, setDraft] = useState("");
+  const [composerOpen, setComposerOpen] = useState(false);
+  const [approvalDraft, setApprovalDraft] = useState({
+    title: "",
+    requestType: "Creative",
+    submittedBy: store.teamMembers[0]?.name || "Alex Morgan",
+    summary: "",
+    details: "",
+    pros: "",
+    cons: "",
+    recommendation: "",
+    status: "Pending",
+    thumbnailColor: "#CBD5E1",
+    attachments: "Brief, mockup, and context note",
+  });
+
+  const selectedApprovalData = selectedApproval;
+
+  const resetComposer = () =>
+    setApprovalDraft({
+      title: "",
+      requestType: "Creative",
+      submittedBy: store.teamMembers[0]?.name || "Alex Morgan",
+      summary: "",
+      details: "",
+      pros: "",
+      cons: "",
+      recommendation: "",
+      status: "Pending",
+      thumbnailColor: "#CBD5E1",
+      attachments: "Brief, mockup, and context note",
+    });
+
+  if (!bundle.approvals.length) {
+    return (
+      <>
+        <EmptyState
+          title="No assets waiting for review."
+          description="When new local review items exist for this project, they will appear here."
+          action={
+            <button
+              onClick={() => setComposerOpen(true)}
+              className="ledger-button ledger-button-primary mt-6 px-4"
+            >
+              Request Approval
+            </button>
+          }
+        />
+        <Drawer
+          open={composerOpen}
+          onClose={() => setComposerOpen(false)}
+          title="Request Approval"
+        >
+          <div className="grid gap-4 sm:grid-cols-2" />
+        </Drawer>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <div className="mb-5 flex justify-end">
+        <button
+          onClick={() => setComposerOpen(true)}
+          className="ledger-button ledger-button-primary min-w-[168px]"
+        >
+          Request Approval
+        </button>
+      </div>
+      <div className="grid gap-5 xl:grid-cols-3">
+        {bundle.approvals.map((approval) => (
+          <button
+            key={approval.id}
+            onClick={() => setSelectedApproval({ ...approval })}
+            className={cn(
+              panelClassName,
+              "p-5 text-left transition hover:-translate-y-0.5 hover:shadow-[0_18px_32px_rgba(15,23,42,0.08)]",
+            )}
+          >
+            <div
+              className="h-40 rounded-[18px]"
+              style={{
+                background: `linear-gradient(135deg, ${approval.thumbnailColor}, #ffffff)`,
+              }}
+            />
+            <div className="mt-5 flex items-center justify-between gap-3">
+              <div>
+                <div className="text-lg font-semibold tracking-[-0.02em] text-ledger-ink">
+                  {approval.title}
+                </div>
+                <div className="mt-1 text-sm text-slate-500">
+                  {approval.submittedBy} · {formatDate(approval.submittedDate)}
+                </div>
+              </div>
+              <Badge tone={approval.status}>{approval.status}</Badge>
+            </div>
+            <div className="mt-4 flex items-center gap-2">
+              <Badge tone={approval.type}>{approval.type}</Badge>
+              {approval.requestType ? (
+                <Badge>{approval.requestType}</Badge>
+              ) : null}
+            </div>
+            <p className="mt-4 text-sm leading-6 text-slate-500">
+              {approval.summary ||
+                approval.details ||
+                "Open to review the full request details."}
+            </p>
+          </button>
+        ))}
+      </div>
+
+      <Modal
+        open={Boolean(selectedApprovalData)}
+        onClose={() => setSelectedApproval(null)}
+        title={selectedApprovalData?.title || "Approval"}
+      >
+        {selectedApprovalData ? (
+          <div className="space-y-5">
+            <div
+              className="h-44 rounded-[20px]"
+              style={{
+                background: `linear-gradient(135deg, ${selectedApprovalData.thumbnailColor}, #ffffff)`,
+              }}
+            />
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="text-sm uppercase tracking-[0.18em] text-[#8FA0BE]">
+                  Approval request
+                </div>
+                <div className="mt-2 text-2xl font-bold tracking-[-0.03em] text-ledger-ink">
+                  {selectedApprovalData.title}
+                </div>
+                <div className="mt-2 text-sm text-slate-500">
+                  {selectedApprovalData.submittedBy} ·{" "}
+                  {formatDate(selectedApprovalData.submittedDate)}
+                </div>
+              </div>
+              <Badge tone={selectedApprovalData.status}>
+                {selectedApprovalData.status}
+              </Badge>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {[
+                ["Type", selectedApprovalData.type],
+                ["Requested by", selectedApprovalData.submittedBy],
+                [
+                  "Request focus",
+                  selectedApprovalData.requestType || "General",
+                ],
+                ["Attachments", selectedApprovalData.attachments || "None"],
+              ].map(([label, value]) => (
+                <div key={label} className="rounded-[16px] bg-slate-50 p-4">
+                  <div className="text-xs uppercase tracking-[0.16em] text-slate-400">
+                    {label}
+                  </div>
+                  <div className="mt-2 text-sm font-semibold text-ledger-ink">
+                    {value}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="rounded-[18px] border border-ledger-border p-5">
+              <div className="text-sm font-semibold uppercase tracking-[0.12em] text-[#8FA0BE]">
+                Summary
+              </div>
+              <p className="mt-3 text-sm leading-6 text-slate-600">
+                {selectedApprovalData.summary || selectedApprovalData.details}
+              </p>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="rounded-[18px] border border-ledger-border p-5">
+                <div className="text-sm font-semibold uppercase tracking-[0.12em] text-[#8FA0BE]">
+                  Pros
+                </div>
+                <p className="mt-3 text-sm leading-6 text-slate-600">
+                  {selectedApprovalData.pros || "Not specified."}
+                </p>
+              </div>
+              <div className="rounded-[18px] border border-ledger-border p-5">
+                <div className="text-sm font-semibold uppercase tracking-[0.12em] text-[#8FA0BE]">
+                  Cons
+                </div>
+                <p className="mt-3 text-sm leading-6 text-slate-600">
+                  {selectedApprovalData.cons || "Not specified."}
+                </p>
+              </div>
+            </div>
+            <div className="rounded-[18px] border border-ledger-border p-5">
+              <div className="text-sm font-semibold uppercase tracking-[0.12em] text-[#8FA0BE]">
+                Recommendation
+              </div>
+              <p className="mt-3 text-sm leading-6 text-slate-600">
+                {selectedApprovalData.recommendation ||
+                  "No recommendation added yet."}
+              </p>
+            </div>
+            <div>
+              <div className="text-sm font-bold uppercase tracking-[0.12em] text-[#8FA0BE]">
+                Decision
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {["Approved", "Pending", "Rejected"].map((item) => (
+                  <button
+                    key={item}
+                    onClick={() => {
+                      onStatusChange(selectedApprovalData.id, item);
+                      setSelectedApproval((current) =>
+                        current ? { ...current, status: item } : current,
+                      );
+                    }}
+                    className={cn(
+                      "rounded-full border px-4 py-2 text-sm font-semibold transition",
+                      selectedApprovalData.status === item
+                        ? "border-ledger-blue bg-[#EEF4FF] text-ledger-blue"
+                        : "border-[#E3EBF7] bg-white text-slate-500 hover:border-[#C9D8F2]",
+                    )}
+                  >
+                    {item}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <div className="text-sm font-bold uppercase tracking-[0.12em] text-[#8FA0BE]">
+                Review comments
+              </div>
+              <div className="mt-4 space-y-3">
+                {selectedApprovalData.comments.map((comment) => (
+                  <div
+                    key={comment.id}
+                    className="rounded-[16px] bg-slate-50 p-3"
+                  >
+                    <div className="text-sm font-medium text-ledger-ink">
+                      {comment.author}
+                    </div>
+                    <div className="mt-1 text-sm text-slate-500">
+                      {comment.message}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <textarea
+                value={activeCommentId === selectedApprovalData.id ? draft : ""}
+                onFocus={() => setActiveCommentId(selectedApprovalData.id)}
+                onChange={(event) => {
+                  setActiveCommentId(selectedApprovalData.id);
+                  setDraft(event.target.value);
+                }}
+                rows={3}
+                placeholder="Add a comment..."
+                className="ledger-textarea mt-4"
+              />
+              <button
+                onClick={() => {
+                  onComment(selectedApprovalData.id, draft);
+                  setDraft("");
+                  setActiveCommentId("");
+                }}
+                className="ledger-button ledger-button-primary mt-3 h-10 px-4 text-sm"
+              >
+                Add Comment
+              </button>
+            </div>
+          </div>
+        ) : null}
+      </Modal>
+      <Drawer
+        open={composerOpen}
+        onClose={() => {
+          setComposerOpen(false);
+          resetComposer();
+        }}
+        title="Request Approval"
+      >
+        <div className="grid gap-4 sm:grid-cols-2">
+          <label className="text-sm font-medium text-ledger-ink sm:col-span-2">
+            <span className="mb-2 block">Title</span>
+            <input
+              value={approvalDraft.title}
+              onChange={(event) =>
+                setApprovalDraft((current) => ({
+                  ...current,
+                  title: event.target.value,
+                }))
+              }
+              className="ledger-input"
+            />
+          </label>
+          <label className="text-sm font-medium text-ledger-ink">
+            <span className="mb-2 block">Type</span>
+            <select
+              value={approvalDraft.requestType}
+              onChange={(event) =>
+                setApprovalDraft((current) => ({
+                  ...current,
+                  requestType: event.target.value,
+                }))
+              }
+              className="ledger-select"
+            >
+              {["Creative", "Copy", "Budget", "Strategy", "Video"].map(
+                (item) => (
+                  <option key={item}>{item}</option>
+                ),
+              )}
+            </select>
+          </label>
+          <label className="text-sm font-medium text-ledger-ink">
+            <span className="mb-2 block">Submitted by</span>
+            <select
+              value={approvalDraft.submittedBy}
+              onChange={(event) =>
+                setApprovalDraft((current) => ({
+                  ...current,
+                  submittedBy: event.target.value,
+                }))
+              }
+              className="ledger-select"
+            >
+              {store.teamMembers.map((member) => (
+                <option key={member.id}>{member.name}</option>
+              ))}
+            </select>
+          </label>
+          <label className="text-sm font-medium text-ledger-ink sm:col-span-2">
+            <span className="mb-2 block">Summary</span>
+            <textarea
+              value={approvalDraft.summary}
+              onChange={(event) =>
+                setApprovalDraft((current) => ({
+                  ...current,
+                  summary: event.target.value,
+                }))
+              }
+              rows={3}
+              className="ledger-textarea"
+            />
+          </label>
+          <label className="text-sm font-medium text-ledger-ink sm:col-span-2">
+            <span className="mb-2 block">Details</span>
+            <textarea
+              value={approvalDraft.details}
+              onChange={(event) =>
+                setApprovalDraft((current) => ({
+                  ...current,
+                  details: event.target.value,
+                }))
+              }
+              rows={5}
+              className="ledger-textarea"
+            />
+          </label>
+          <label className="text-sm font-medium text-ledger-ink">
+            <span className="mb-2 block">Pros</span>
+            <input
+              value={approvalDraft.pros}
+              onChange={(event) =>
+                setApprovalDraft((current) => ({
+                  ...current,
+                  pros: event.target.value,
+                }))
+              }
+              className="ledger-input"
+            />
+          </label>
+          <label className="text-sm font-medium text-ledger-ink">
+            <span className="mb-2 block">Cons</span>
+            <input
+              value={approvalDraft.cons}
+              onChange={(event) =>
+                setApprovalDraft((current) => ({
+                  ...current,
+                  cons: event.target.value,
+                }))
+              }
+              className="ledger-input"
+            />
+          </label>
+          <label className="text-sm font-medium text-ledger-ink sm:col-span-2">
+            <span className="mb-2 block">Recommendation</span>
+            <textarea
+              value={approvalDraft.recommendation}
+              onChange={(event) =>
+                setApprovalDraft((current) => ({
+                  ...current,
+                  recommendation: event.target.value,
+                }))
+              }
+              rows={3}
+              className="ledger-textarea"
+            />
+          </label>
+        </div>
+        <div className="mt-5 flex justify-end">
+          <button
+            onClick={() => {
+              if (
+                !approvalDraft.title.trim() ||
+                !approvalDraft.details.trim()
+              ) {
+                return;
+              }
+              onCreateApproval(bundle.project.id, approvalDraft);
+              setComposerOpen(false);
+              resetComposer();
+            }}
+            className="ledger-button ledger-button-primary min-w-[160px]"
+          >
+            Save Request
+          </button>
+        </div>
+      </Drawer>
+    </>
   );
 }
 
@@ -2308,6 +3070,9 @@ function ProjectSettingsScreen({ bundle, store, onUpdateProject }) {
     brandAccent: bundle.project.brandAccent,
     status: bundle.project.status,
   });
+  const formIsValid = Object.values(form).every(
+    (value) => String(value).trim().length > 0,
+  );
 
   return (
     <div className="grid gap-6 xl:grid-cols-[1fr_0.9fr]">
@@ -2366,8 +3131,9 @@ function ProjectSettingsScreen({ bundle, store, onUpdateProject }) {
           </label>
         </div>
         <button
+          disabled={!formIsValid}
           onClick={() => onUpdateProject(bundle.project.id, form)}
-          className="ledger-button ledger-button-primary mt-6 px-5 text-sm"
+          className="ledger-button ledger-button-primary mt-6 px-5 text-sm disabled:cursor-not-allowed disabled:opacity-50"
         >
           Save Project Settings
         </button>
@@ -2409,6 +3175,125 @@ function ProjectSettingsScreen({ bundle, store, onUpdateProject }) {
   );
 }
 
+function ProjectTeamScreen({ bundle, store, onToggleAssignment }) {
+  const assignedMembers = store.teamMembers.filter((member) =>
+    member.assignedProjectIds.includes(bundle.project.id),
+  );
+  const unassignedMembers = store.teamMembers.filter(
+    (member) => !member.assignedProjectIds.includes(bundle.project.id),
+  );
+
+  return (
+    <div className="space-y-6">
+      <div className="grid gap-4 md:grid-cols-3">
+        <div className={cn(subtlePanelClassName, "p-5")}>
+          <div className="text-sm text-slate-500">Assigned Members</div>
+          <div className="mt-3 text-3xl font-bold tracking-[-0.03em] text-ledger-ink">
+            {assignedMembers.length}
+          </div>
+        </div>
+        <div className={cn(subtlePanelClassName, "p-5")}>
+          <div className="text-sm text-slate-500">Available Team</div>
+          <div className="mt-3 text-3xl font-bold tracking-[-0.03em] text-ledger-ink">
+            {store.teamMembers.length}
+          </div>
+        </div>
+        <div className={cn(subtlePanelClassName, "p-5")}>
+          <div className="text-sm text-slate-500">Unassigned</div>
+          <div className="mt-3 text-3xl font-bold tracking-[-0.03em] text-ledger-ink">
+            {unassignedMembers.length}
+          </div>
+        </div>
+      </div>
+
+      <div className="grid gap-6 xl:grid-cols-2">
+        <SectionCard title="Assigned People">
+          <div className="space-y-3">
+            {assignedMembers.map((member) => (
+              <div
+                key={member.id}
+                className="flex items-center justify-between rounded-[18px] border border-ledger-border px-4 py-3"
+              >
+                <button
+                  onClick={() => onToggleAssignment(member.id)}
+                  className="flex items-center gap-3 text-left"
+                >
+                  <div
+                    className="flex h-11 w-11 items-center justify-center rounded-full text-sm font-semibold text-white"
+                    style={{ backgroundColor: member.avatarColor }}
+                  >
+                    {member.name
+                      .split(" ")
+                      .map((part) => part[0])
+                      .join("")
+                      .slice(0, 2)}
+                  </div>
+                  <div>
+                    <div className="font-semibold text-ledger-ink">
+                      {member.name}
+                    </div>
+                    <div className="text-sm text-slate-500">
+                      {member.role} · {member.email}
+                    </div>
+                  </div>
+                </button>
+                <button
+                  onClick={() => onToggleAssignment(member.id)}
+                  className="rounded-full border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-100"
+                >
+                  Unassign
+                </button>
+              </div>
+            ))}
+            {!assignedMembers.length ? (
+              <div className="rounded-[18px] bg-slate-50 px-4 py-5 text-sm text-slate-500">
+                No one is assigned to this project yet.
+              </div>
+            ) : null}
+          </div>
+        </SectionCard>
+        <SectionCard title="Available People">
+          <div className="space-y-3">
+            {unassignedMembers.map((member) => (
+              <div
+                key={member.id}
+                className="flex items-center justify-between rounded-[18px] border border-ledger-border px-4 py-3"
+              >
+                <div className="flex items-center gap-3 text-left">
+                  <div
+                    className="flex h-11 w-11 items-center justify-center rounded-full text-sm font-semibold text-white"
+                    style={{ backgroundColor: member.avatarColor }}
+                  >
+                    {member.name
+                      .split(" ")
+                      .map((part) => part[0])
+                      .join("")
+                      .slice(0, 2)}
+                  </div>
+                  <div>
+                    <div className="font-semibold text-ledger-ink">
+                      {member.name}
+                    </div>
+                    <div className="text-sm text-slate-500">
+                      {member.role} · {member.email}
+                    </div>
+                  </div>
+                </div>
+                <button
+                  onClick={() => onToggleAssignment(member.id)}
+                  className="rounded-full border border-ledger-blue/20 bg-[#EEF4FF] px-3 py-2 text-sm font-semibold text-ledger-blue transition hover:bg-[#DDE8FF]"
+                >
+                  Assign
+                </button>
+              </div>
+            ))}
+          </div>
+        </SectionCard>
+      </div>
+    </div>
+  );
+}
+
 export default function ProjectModulePage({ projectId, module }) {
   const {
     selectors,
@@ -2426,6 +3311,8 @@ export default function ProjectModulePage({ projectId, module }) {
     updateProject,
     createCampaign,
     updateCampaign,
+    createApproval,
+    toggleTeamMemberAssignment,
     createCalendarEvent,
     updateCalendarEvent,
   } = useAppContext();
@@ -2514,10 +3401,21 @@ export default function ProjectModulePage({ projectId, module }) {
       />
     ),
     approvals: (
-      <ApprovalsScreen
+      <ApprovalWorkbench
         bundle={bundle}
         onStatusChange={updateApprovalStatus}
         onComment={addApprovalComment}
+        onCreateApproval={createApproval}
+        store={store}
+      />
+    ),
+    team: (
+      <ProjectTeamScreen
+        bundle={bundle}
+        store={store}
+        onToggleAssignment={(memberId) =>
+          toggleTeamMemberAssignment(bundle.project.id, memberId)
+        }
       />
     ),
     reports: (
