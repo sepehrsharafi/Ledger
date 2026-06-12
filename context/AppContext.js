@@ -1,7 +1,13 @@
 "use client";
 
-import { createContext, useContext, useMemo, useState } from "react";
-import { createInitialData } from "@/data/mockData";
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import {
+  createEntity,
+  deleteEntity,
+  fetchBootstrap,
+  updateEntity,
+} from "@/lib/apiClient";
+import { createEmptyStore, createStoreFromSnapshot } from "@/lib/storeAdapter";
 import { groupBy, sum } from "@/lib/utils";
 
 const AppContext = createContext(null);
@@ -10,10 +16,51 @@ function makeId(prefix) {
   return `${prefix}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
+function getCurrentUser(store) {
+  return (
+    store.teamMembers.find((member) => member.name === "Alex Morgan") ||
+    store.teamMembers[0] || {
+      name: "Alex Morgan",
+    }
+  );
+}
+
 export function AppProvider({ children }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [viewerRole, setViewerRole] = useState("Admin");
-  const [store, setStore] = useState(createInitialData);
+  const [store, setStore] = useState(createEmptyStore);
+  const [isStoreHydrated, setIsStoreHydrated] = useState(false);
+
+  async function refreshStore() {
+    const snapshot = await fetchBootstrap();
+    setStore(createStoreFromSnapshot(snapshot));
+    setIsStoreHydrated(true);
+    return snapshot;
+  }
+
+  useEffect(() => {
+    let active = true;
+
+    async function load() {
+      try {
+        const snapshot = await fetchBootstrap();
+        if (!active) {
+          return;
+        }
+        setStore(createStoreFromSnapshot(snapshot));
+      } finally {
+        if (active) {
+          setIsStoreHydrated(true);
+        }
+      }
+    }
+
+    load();
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const selectors = useMemo(() => {
     const leadsByProject = groupBy(store.leads, "projectId");
@@ -21,7 +68,9 @@ export function AppProvider({ children }) {
     const campaignsByProject = groupBy(store.campaigns, "projectId");
     const approvalsByProject = groupBy(store.approvals, "projectId");
     const eventsByProject = groupBy(store.calendarEvents, "projectId");
-    const reportByProject = Object.fromEntries(store.reportConfigs.map((item) => [item.projectId, item]));
+    const reportByProject = Object.fromEntries(
+      store.reportConfigs.map((item) => [item.projectId, item])
+    );
 
     return {
       projectCards: store.projects.map((project) => ({
@@ -30,7 +79,7 @@ export function AppProvider({ children }) {
         campaignCount: (campaignsByProject[project.id] || []).length,
         taskCount: (tasksByProject[project.id] || []).length,
         teamCount: store.teamMembers.filter((member) =>
-          member.assignedProjectIds.includes(project.id),
+          member.assignedProjectIds.includes(project.id)
         ).length,
       })),
       getProjectBundle(projectId) {
@@ -70,7 +119,10 @@ export function AppProvider({ children }) {
           return acc;
         }, {});
         const won = statusCounts.Won || 0;
-        const pipelineValue = sum(projectLeads, (lead) => Number(lead.estimatedValue) || 0);
+        const pipelineValue = sum(
+          projectLeads,
+          (lead) => Number(lead.estimatedValue) || 0
+        );
         return {
           total: projectLeads.length,
           statusCounts,
@@ -81,355 +133,306 @@ export function AppProvider({ children }) {
     };
   }, [store]);
 
-  const value = useMemo(() => ({
-    isAuthenticated,
-    viewerRole,
-    store,
-    selectors,
-    login() {
-      setIsAuthenticated(true);
-    },
-    logout() {
-      setIsAuthenticated(false);
-    },
-    setViewerRole,
-    addProject(projectInput) {
-      const newProject = {
-        id: makeId("project"),
-        name: projectInput.name,
-        clientName: projectInput.clientName,
-        type: projectInput.type,
-        brandPrimary: projectInput.brandPrimary,
-        brandAccent: projectInput.brandAccent,
-        status: "Active",
-        createdDate: new Date().toISOString().slice(0, 10),
-        topKpiLabel: "Top KPI",
-        topKpiValue: "--",
-      };
+  const value = useMemo(
+    () => ({
+      isAuthenticated,
+      viewerRole,
+      store,
+      selectors,
+      isStoreHydrated,
+      login() {
+        setIsAuthenticated(true);
+      },
+      logout() {
+        setIsAuthenticated(false);
+      },
+      setViewerRole,
+      refreshStore,
+      async addProject(projectInput) {
+        const project = await createEntity("projects", {
+          name: projectInput.name,
+          clientName: projectInput.clientName,
+          type: projectInput.type,
+          brandPrimary: projectInput.brandPrimary,
+          brandAccent: projectInput.brandAccent,
+          status: "Active",
+          topKpiLabel: "Top KPI",
+          topKpiValue: "--",
+        });
 
-      setStore((current) => ({
-        ...current,
-        projects: [newProject, ...current.projects],
-        kpiSnapshots: { ...current.kpiSnapshots, [newProject.id]: null },
-        timeSeries: { ...current.timeSeries, [newProject.id]: [] },
-        channelBreakdowns: { ...current.channelBreakdowns, [newProject.id]: [] },
-        timelineAnnotations: { ...current.timelineAnnotations, [newProject.id]: [] },
-        goals: { ...current.goals, [newProject.id]: [] },
-        reportConfigs: [
-          ...current.reportConfigs,
-          {
-            id: makeId("report"),
-            projectId: newProject.id,
-            includedSections: [],
-            frequency: "Weekly",
-            internalReviewFirst: true,
-            recipients: [],
-            lastSentDate: null,
-            engagementStats: { opens: 0, downloads: 0, lastOpenedDate: null },
-          },
-        ],
-      }));
+        await createEntity("reportConfigs", {
+          id: makeId("report"),
+          projectId: project.id,
+          includedSections: [],
+          frequency: "Weekly",
+          internalReviewFirst: true,
+          lastSentAt: null,
+          engagementStats: { opens: 0, downloads: 0, lastOpenedDate: null },
+        });
 
-      return newProject.id;
-    },
-    updateLeadStatus(leadId, status) {
-      setStore((current) => ({
-        ...current,
-        leads: current.leads.map((lead) => (lead.id === leadId ? { ...lead, status } : lead)),
-        leadActivities: [
-          {
-            id: makeId("activity"),
-            leadId,
-            projectId: current.leads.find((lead) => lead.id === leadId)?.projectId,
-            activityType: "Status change",
-            content: `Lead moved to ${status}.`,
-            author: "Alex Morgan",
-            timestamp: new Date().toISOString(),
-          },
-          ...current.leadActivities,
-        ],
-      }));
-    },
-    createLead(projectId, payload) {
-      const leadId = makeId("lead");
-      const estimatedValue = payload.estimatedValue.trim()
-        ? Number(payload.estimatedValue)
-        : null;
-      const nextLead = {
-        id: leadId,
-        projectId,
-        name: payload.name.trim(),
-        email: payload.email.trim(),
-        company: payload.company.trim() || "Individual Customer",
-        phone: payload.phone.trim() || "+1-555-0100",
-        source: payload.source,
-        status: payload.status,
-        estimatedValue: Number.isFinite(estimatedValue) ? estimatedValue : null,
-        capturedFrom: payload.capturedFrom.trim() || payload.source,
-        assignedTeamMember: payload.assignedTeamMember,
-        createdDate: new Date().toISOString().slice(0, 10),
-        lastContactedDate: new Date().toISOString().slice(0, 10),
-      };
+        await refreshStore();
+        return project.id;
+      },
+      async updateLeadStatus(leadId, status) {
+        const lead = store.leads.find((item) => item.id === leadId);
+        if (!lead) {
+          return;
+        }
 
-      setStore((current) => ({
-        ...current,
-        leads: [nextLead, ...current.leads],
-        leadActivities: [
-          {
-            id: makeId("activity"),
-            leadId,
+        await updateEntity("leads", leadId, { status });
+        await createEntity("leadActivities", {
+          id: makeId("activity"),
+          leadId,
+          projectId: lead.projectId,
+          activityType: "Status change",
+          content: `Lead moved to ${status}.`,
+          author: getCurrentUser(store).name,
+        });
+        await refreshStore();
+      },
+      async createLead(projectId, payload) {
+        const leadId = makeId("lead");
+        const estimatedValue = payload.estimatedValue.trim()
+          ? Number(payload.estimatedValue)
+          : null;
+        const nextLead = await createEntity("leads", {
+          id: leadId,
+          projectId,
+          name: payload.name.trim(),
+          email: payload.email.trim(),
+          company: payload.company.trim() || "Individual Customer",
+          phone: payload.phone.trim() || "+1-555-0100",
+          source: payload.source,
+          status: payload.status,
+          estimatedValue: Number.isFinite(estimatedValue) ? estimatedValue : null,
+          capturedFrom: payload.capturedFrom.trim() || payload.source,
+          assignedTeamMember: payload.assignedTeamMember,
+        });
+
+        await createEntity("leadActivities", {
+          id: makeId("activity"),
+          leadId: nextLead.id,
+          projectId,
+          activityType: "Lead created",
+          content: `${nextLead.name} was added to the pipeline.`,
+          author: getCurrentUser(store).name,
+        });
+        await refreshStore();
+      },
+      async updateLead(leadId, updates) {
+        await updateEntity("leads", leadId, updates);
+        await refreshStore();
+      },
+      async markLeadContacted(leadId) {
+        const lead = store.leads.find((item) => item.id === leadId);
+        if (!lead) {
+          return;
+        }
+
+        await updateEntity("leads", leadId, {
+          status: lead.status === "New" ? "Contacted" : lead.status,
+          lastContactedAt: new Date().toISOString().slice(0, 10),
+        });
+        await createEntity("leadActivities", {
+          id: makeId("activity"),
+          leadId,
+          projectId: lead.projectId,
+          activityType: "Call",
+          content: "Lead marked as contacted.",
+          author: getCurrentUser(store).name,
+        });
+        await refreshStore();
+      },
+      async addLeadNote(leadId, note) {
+        const lead = store.leads.find((item) => item.id === leadId);
+        if (!lead || !note.trim()) {
+          return;
+        }
+
+        await createEntity("leadActivities", {
+          id: makeId("activity"),
+          leadId,
+          projectId: lead.projectId,
+          activityType: "Note",
+          content: note.trim(),
+          author: getCurrentUser(store).name,
+        });
+        await refreshStore();
+      },
+      async updateTaskColumn(taskId, column) {
+        await updateEntity("tasks", taskId, { column });
+        await refreshStore();
+      },
+      async createTask(projectId, payload) {
+        await createEntity("tasks", {
+          id: makeId("task"),
+          projectId,
+          title: payload.title.trim(),
+          description: payload.description.trim(),
+          column: payload.column,
+          assignee: payload.assignee,
+          dueDate: payload.dueDate,
+          priority: payload.priority,
+          notes: payload.notes?.trim() || "",
+        });
+        await refreshStore();
+      },
+      async updateTask(taskId, updates) {
+        await updateEntity("tasks", taskId, updates);
+        await refreshStore();
+      },
+      async toggleTeamMemberAssignment(projectId, memberId) {
+        const member = store.teamMembers.find((item) => item.id === memberId);
+        if (!member) {
+          return;
+        }
+
+        const recordId = `${projectId}__${memberId}`;
+        if (member.assignedProjectIds.includes(projectId)) {
+          await deleteEntity("projectMembers", recordId);
+        } else {
+          await createEntity("projectMembers", {
             projectId,
-            activityType: "Lead created",
-            content: `${nextLead.name} was added to the pipeline.`,
-            author: "Alex Morgan",
-            timestamp: new Date().toISOString(),
-          },
-          ...current.leadActivities,
-        ],
-      }));
-    },
-    updateLead(leadId, updates) {
-      setStore((current) => ({
-        ...current,
-        leads: current.leads.map((lead) => (lead.id === leadId ? { ...lead, ...updates } : lead)),
-      }));
-    },
-    markLeadContacted(leadId) {
-      setStore((current) => ({
-        ...current,
-        leads: current.leads.map((lead) =>
-          lead.id === leadId
-            ? { ...lead, status: lead.status === "New" ? "Contacted" : lead.status, lastContactedDate: new Date().toISOString().slice(0, 10) }
-            : lead
-        ),
-        leadActivities: [
-          {
-            id: makeId("activity"),
-            leadId,
-            projectId: current.leads.find((lead) => lead.id === leadId)?.projectId,
-            activityType: "Call",
-            content: "Lead marked as contacted.",
-            author: "Alex Morgan",
-            timestamp: new Date().toISOString(),
-          },
-          ...current.leadActivities,
-        ],
-      }));
-    },
-    addLeadNote(leadId, note) {
-      const lead = store.leads.find((item) => item.id === leadId);
-      if (!lead || !note.trim()) {
-        return;
-      }
-      setStore((current) => ({
-        ...current,
-        leadActivities: [
-          {
-            id: makeId("activity"),
-            leadId,
-            projectId: lead.projectId,
-            activityType: "Note",
-            content: note.trim(),
-            author: "Alex Morgan",
-            timestamp: new Date().toISOString(),
-          },
-          ...current.leadActivities,
-        ],
-      }));
-    },
-    updateTaskColumn(taskId, column) {
-      setStore((current) => ({
-        ...current,
-        tasks: current.tasks.map((task) => (task.id === taskId ? { ...task, column } : task)),
-      }));
-    },
-    createTask(projectId, payload) {
-      setStore((current) => ({
-        ...current,
-        tasks: [
-          {
-            id: makeId("task"),
-            projectId,
-            title: payload.title.trim(),
-            description: payload.description.trim(),
-            column: payload.column,
-            assignee: payload.assignee,
-            dueDate: payload.dueDate,
-            priority: payload.priority,
-            notes: payload.notes?.trim() || "",
-          },
-          ...current.tasks,
-        ],
-      }));
-    },
-    updateTask(taskId, updates) {
-      setStore((current) => ({
-        ...current,
-        tasks: current.tasks.map((task) => (task.id === taskId ? { ...task, ...updates } : task)),
-      }));
-    },
-    toggleTeamMemberAssignment(projectId, memberId) {
-      setStore((current) => ({
-        ...current,
-        teamMembers: current.teamMembers.map((member) => {
-          if (member.id !== memberId) {
-            return member;
-          }
-          const assigned = member.assignedProjectIds.includes(projectId);
-          return {
-            ...member,
-            assignedProjectIds: assigned
-              ? member.assignedProjectIds.filter((item) => item !== projectId)
-              : [...member.assignedProjectIds, projectId],
-          };
-        }),
-      }));
-    },
-    updateApprovalStatus(approvalId, status) {
-      setStore((current) => ({
-        ...current,
-        approvals: current.approvals.map((approval) => (approval.id === approvalId ? { ...approval, status } : approval)),
-      }));
-    },
-    addApprovalComment(approvalId, message) {
-      if (!message.trim()) {
-        return;
-      }
-      setStore((current) => ({
-        ...current,
-        approvals: current.approvals.map((approval) =>
-          approval.id === approvalId
-            ? {
-                ...approval,
-                comments: [
-                  ...approval.comments,
-                  {
-                    id: makeId("comment"),
-                    author: "Alex Morgan",
-                    message: message.trim(),
-                    timestamp: new Date().toISOString(),
-                  },
-                ],
-              }
-            : approval
-        ),
-      }));
-    },
-    createApproval(projectId, payload) {
-      setStore((current) => ({
-        ...current,
-        approvals: [
-          {
-            id: makeId("approval"),
-            projectId,
-            title: payload.title.trim(),
-            requestType: payload.requestType,
-            type: payload.requestType,
-            thumbnailColor: payload.thumbnailColor || "#CBD5E1",
-            status: payload.status,
-            submittedBy: payload.submittedBy,
-            submittedDate: new Date().toISOString().slice(0, 10),
-            summary: payload.summary.trim(),
-            details: payload.details.trim(),
-            pros: payload.pros,
-            cons: payload.cons,
-            attachments: payload.attachments,
-            recommendation: payload.recommendation.trim(),
-            comments: [],
-          },
-          ...current.approvals,
-        ],
-      }));
-    },
-    updateReportConfig(projectId, updater) {
-      setStore((current) => ({
-        ...current,
-        reportConfigs: current.reportConfigs.map((config) =>
-          config.projectId === projectId ? updater(config) : config
-        ),
-      }));
-    },
-    updateProject(projectId, updates) {
-      setStore((current) => ({
-        ...current,
-        projects: current.projects.map((project) => (project.id === projectId ? { ...project, ...updates } : project)),
-      }));
-    },
-    createCampaign(projectId, payload) {
-      setStore((current) => ({
-        ...current,
-        campaigns: [
-          {
-            id: makeId("campaign"),
-            projectId,
-            name: payload.name.trim(),
-            channel: payload.channel,
-            status: payload.status,
-            startDate: payload.startDate,
-            endDate: payload.endDate,
-            budget: Number(payload.budget) || 0,
-            spent: Number(payload.spent) || 0,
-            impressions: Number(payload.impressions) || 0,
-            clicks: Number(payload.clicks) || 0,
-            conversions: Number(payload.conversions) || 0,
-          },
-          ...current.campaigns,
-        ],
-      }));
-    },
-    updateCampaign(campaignId, updates) {
-      setStore((current) => ({
-        ...current,
-        campaigns: current.campaigns.map((campaign) => (campaign.id === campaignId ? { ...campaign, ...updates } : campaign)),
-      }));
-    },
-    createCalendarEvent(projectId, payload) {
-      setStore((current) => ({
-        ...current,
-        calendarEvents: [
-          {
-            id: makeId("event"),
-            projectId,
-            title: payload.title.trim(),
-            channel: payload.channel,
-            date: payload.date,
-            status: payload.status,
-            assignee: payload.assignee,
-          },
-          ...current.calendarEvents,
-        ],
-      }));
-    },
-    updateCalendarEvent(eventId, updates) {
-      setStore((current) => ({
-        ...current,
-        calendarEvents: current.calendarEvents.map((event) => (event.id === eventId ? { ...event, ...updates } : event)),
-      }));
-    },
-    toggleIntegration(integrationId) {
-      setStore((current) => ({
-        ...current,
-        agencySettings: {
-          ...current.agencySettings,
-          integrations: current.agencySettings.integrations.map((item) =>
-            item.id === integrationId ? { ...item, connected: !item.connected } : item
+            memberId,
+          });
+        }
+        await refreshStore();
+      },
+      async updateApprovalStatus(approvalId, status) {
+        await updateEntity("approvals", approvalId, { status });
+        await refreshStore();
+      },
+      async addApprovalComment(approvalId, message) {
+        if (!message.trim()) {
+          return;
+        }
+
+        await createEntity("approvalComments", {
+          id: makeId("comment"),
+          approvalId,
+          author: getCurrentUser(store).name,
+          message: message.trim(),
+        });
+        await refreshStore();
+      },
+      async createApproval(projectId, payload) {
+        await createEntity("approvals", {
+          id: makeId("approval"),
+          projectId,
+          title: payload.title.trim(),
+          requestType: payload.requestType,
+          type: payload.requestType,
+          thumbnailColor: payload.thumbnailColor || "#CBD5E1",
+          status: payload.status,
+          submittedBy: payload.submittedBy,
+          summary: payload.summary.trim(),
+          details: payload.details.trim(),
+          pros: payload.pros,
+          cons: payload.cons,
+          attachments: payload.attachments,
+          recommendation: payload.recommendation.trim(),
+        });
+        await refreshStore();
+      },
+      async updateReportConfig(projectId, updater) {
+        const current = store.reportConfigs.find((config) => config.projectId === projectId);
+        if (!current) {
+          return;
+        }
+
+        const next = updater(current);
+        await updateEntity("reportConfigs", current.id, {
+          includedSections: next.includedSections,
+          frequency: next.frequency,
+          internalReviewFirst: next.internalReviewFirst,
+          lastSentAt: next.lastSentDate,
+          engagementStats: next.engagementStats,
+        });
+
+        for (const email of current.recipients) {
+          await deleteEntity("reportRecipients", `${current.id}__${email}`);
+        }
+        for (const email of next.recipients) {
+          await createEntity("reportRecipients", {
+            reportConfigId: current.id,
+            email,
+          });
+        }
+
+        await refreshStore();
+      },
+      async updateProject(projectId, updates) {
+        const next = { ...updates };
+        if ("createdDate" in next) {
+          next.createdAt = next.createdDate;
+          delete next.createdDate;
+        }
+        await updateEntity("projects", projectId, next);
+        await refreshStore();
+      },
+      async createCampaign(projectId, payload) {
+        await createEntity("campaigns", {
+          id: makeId("campaign"),
+          projectId,
+          name: payload.name.trim(),
+          channel: payload.channel,
+          status: payload.status,
+          startDate: payload.startDate,
+          endDate: payload.endDate,
+          budget: Number(payload.budget) || 0,
+          spent: Number(payload.spent) || 0,
+          impressions: Number(payload.impressions) || 0,
+          clicks: Number(payload.clicks) || 0,
+          conversions: Number(payload.conversions) || 0,
+          owner: payload.owner || getCurrentUser(store).name,
+          notes: payload.notes?.trim() || "",
+        });
+        await refreshStore();
+      },
+      async updateCampaign(campaignId, updates) {
+        await updateEntity("campaigns", campaignId, updates);
+        await refreshStore();
+      },
+      async createCalendarEvent(projectId, payload) {
+        await createEntity("calendarEvents", {
+          id: makeId("event"),
+          projectId,
+          title: payload.title.trim(),
+          channel: payload.channel,
+          date: payload.date,
+          status: payload.status,
+          assignee: payload.assignee,
+        });
+        await refreshStore();
+      },
+      async updateCalendarEvent(eventId, updates) {
+        await updateEntity("calendarEvents", eventId, updates);
+        await refreshStore();
+      },
+      async toggleIntegration(integrationId) {
+        const settings = store.agencySettings;
+        await updateEntity("agencySettings", "agency", {
+          integrations: settings.integrations.map((item) =>
+            item.id === integrationId
+              ? { ...item, connected: !item.connected }
+              : item
           ),
-        },
-      }));
-    },
-    toggleNotification(key) {
-      setStore((current) => ({
-        ...current,
-        agencySettings: {
-          ...current.agencySettings,
+        });
+        await refreshStore();
+      },
+      async toggleNotification(key) {
+        const settings = store.agencySettings;
+        await updateEntity("agencySettings", "agency", {
           notifications: {
-            ...current.agencySettings.notifications,
-            [key]: !current.agencySettings.notifications[key],
+            ...settings.notifications,
+            [key]: !settings.notifications[key],
           },
-        },
-      }));
-    },
-  }), [isAuthenticated, selectors, store, viewerRole]);
+        });
+        await refreshStore();
+      },
+    }),
+    [isAuthenticated, isStoreHydrated, selectors, store, viewerRole]
+  );
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }

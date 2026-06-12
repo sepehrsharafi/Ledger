@@ -24,16 +24,38 @@ function formatDate(value) {
   return value;
 }
 
-function normalizeValue(field, value) {
+function parseJson(value) {
+  if (typeof value !== "string") {
+    return value;
+  }
+
+  try {
+    return JSON.parse(value);
+  } catch {
+    return value;
+  }
+}
+
+function normalizeValue(collection, field, value) {
   if (value === null || value === undefined) {
     return value;
   }
 
-  if (field === "createdAt" || field === "lastContactedAt" || field === "submittedAt" || field === "date" || field === "month") {
+  const config = getBackendCollectionConfig(collection);
+
+  if ((config.jsonFields || []).includes(field)) {
+    return parseJson(value);
+  }
+
+  if ((config.numericFields || []).includes(field)) {
+    return Number(value);
+  }
+
+  if ((config.dateFields || []).includes(field)) {
     return formatDate(value);
   }
 
-  if (field.endsWith("At")) {
+  if ((config.timestampFields || []).includes(field) || field.endsWith("At")) {
     return typeof value === "string" && value.length === 10 ? value : formatTimestamp(value);
   }
 
@@ -43,7 +65,10 @@ function normalizeValue(field, value) {
 function mapRowToRecord(collection, row) {
   const config = getBackendCollectionConfig(collection);
   return Object.fromEntries(
-    Object.entries(config.columns).map(([field, column]) => [field, normalizeValue(field, row[column])])
+    Object.entries(config.columns).map(([field, column]) => [
+      field,
+      normalizeValue(collection, field, row[column]),
+    ])
   );
 }
 

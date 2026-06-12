@@ -97,7 +97,7 @@ export default function AppShell({
 }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { isAuthenticated, logout, store, viewerRole } = useAppContext();
+  const { isAuthenticated, isStoreHydrated, logout, store, viewerRole } = useAppContext();
   const [menuOpen, setMenuOpen] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [projectMenuOpen, setProjectMenuOpen] = useState(false);
@@ -151,6 +151,10 @@ export default function AppShell({
   }, []);
 
   if (!isAuthenticated) {
+    return null;
+  }
+
+  if (!isStoreHydrated) {
     return null;
   }
 

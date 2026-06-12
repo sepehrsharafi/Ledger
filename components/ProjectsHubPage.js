@@ -29,8 +29,8 @@ export default function ProjectsHubPage() {
   const { selectors, addProject } = useAppContext();
   const [modalOpen, setModalOpen] = useState(false);
 
-  function handleCreateProject(form) {
-    const newProjectId = addProject(form);
+  async function handleCreateProject(form) {
+    const newProjectId = await addProject(form);
     router.push(`/projects/${newProjectId}`);
   }
 
