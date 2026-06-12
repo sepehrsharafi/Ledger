@@ -127,6 +127,9 @@ export async function getProjectOverviewView(projectId) {
       series: timeSeries.map(({ id, projectId: _projectId, ...item }) => item),
       channels: channelBreakdowns.map(({ id, projectId: _projectId, ...item }) => item),
       goals: goals.map(({ id, projectId: _projectId, ...item }) => item),
+      leads: leadRecords.map(toLead),
+      campaigns,
+      tasks,
       leadCount: leadRecords.length,
       topCampaigns: campaigns
         .slice()

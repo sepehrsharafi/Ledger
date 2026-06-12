@@ -76,10 +76,10 @@ function StatIcon({ kind }) {
   };
 
   return (
-    <div className="flex h-9 w-9 items-center justify-center rounded-[12px] bg-[#F4F7FF] text-ledger-blue">
+    <div className="flex h-10 w-10 items-center justify-center rounded-[12px] border border-[#E2EAF7] bg-white text-ledger-blue">
       <svg
         viewBox="0 0 20 20"
-        className="h-4.5 w-4.5"
+        className="h-6 w-6"
         fill="none"
         stroke="currentColor"
         strokeWidth="1.8"
@@ -172,21 +172,13 @@ function avatarForMember(store, author) {
 }
 
 function channelLegendData(bundle) {
-  if (bundle.project.id === "lumen-skincare") {
-    return [
-      { name: "Paid Social", value: 42 },
-      { name: "Google Ads", value: 24 },
-      { name: "Organic Search", value: 18 },
-      { name: "Email", value: 8 },
-      { name: "Direct", value: 5 },
-      { name: "Other", value: 3 },
-    ];
-  }
-
-  const base = bundle.channels.map((item) => ({
-    name: channelLabelMap[item.channel] || item.channel,
-    raw: item.visits,
-  }));
+  const base = Object.entries(
+    (bundle.campaigns || []).reduce((acc, campaign) => {
+      const key = channelLabelMap[campaign.channel] || campaign.channel;
+      acc[key] = (acc[key] || 0) + Number(campaign.conversions || 0);
+      return acc;
+    }, {}),
+  ).map(([name, raw]) => ({ name, raw }));
   const total = base.reduce((sum, item) => sum + item.raw, 0) || 1;
   const normalized = base.map((item) => ({
     name: item.name,
@@ -305,7 +297,23 @@ function PerformanceTooltip({ active, label, payload }) {
 }
 
 export default function OverviewDashboard({ bundle, recentActivity, store }) {
-  const totalLeads = bundle.leadCount ?? bundle.leads.length;
+  const leads = bundle.leads || [];
+  const campaigns = bundle.campaigns || [];
+  const tasks = bundle.tasks || [];
+  const totalLeads = bundle.leadCount ?? leads.length;
+  const totalConversions = campaigns.reduce(
+    (sum, campaign) => sum + Number(campaign.conversions || 0),
+    0,
+  );
+  const totalSpend = campaigns.reduce(
+    (sum, campaign) => sum + Number(campaign.spent || 0),
+    0,
+  );
+  const wonValue = leads
+    .filter((lead) => lead.status === "Won")
+    .reduce((sum, lead) => sum + Number(lead.estimatedValue || 0), 0);
+  const costPerLead = totalLeads ? totalSpend / totalLeads : 0;
+  const roi = totalSpend ? wonValue / totalSpend : 0;
   const previousLeadCount =
     bundle.series.at(-2)?.leads || Math.max(1, totalLeads - 20);
   const leadChange =
@@ -323,29 +331,22 @@ export default function OverviewDashboard({ bundle, recentActivity, store }) {
     conversionRate: item.traffic ? (item.conversions / item.traffic) * 100 : 0,
     costPerLeadRate: item.leads ? item.spend / Math.max(1, item.leads) : 0,
   }));
-  const funnelStages = [
-    { label: "New", count: totalLeads, percent: "100%" },
-    {
-      label: "Contacted",
-      count: Math.round(totalLeads * 0.656),
-      percent: "65.6%",
-    },
-    {
-      label: "Qualified",
-      count: Math.round(totalLeads * 0.328),
-      percent: "32.8%",
-    },
-    {
-      label: "Proposal Sent",
-      count: Math.round(totalLeads * 0.141),
-      percent: "14.1%",
-    },
-    { label: "Won", count: Math.round(totalLeads * 0.094), percent: "9.4%" },
-  ];
+  const statusCounts = leads.reduce((acc, lead) => {
+    acc[lead.status] = (acc[lead.status] || 0) + 1;
+    return acc;
+  }, {});
+  const funnelStages = ["New", "Contacted", "Qualified", "Won"].map((label) => {
+    const count = statusCounts[label] || 0;
+    return {
+      label,
+      count,
+      percent: `${totalLeads ? ((count / totalLeads) * 100).toFixed(1) : "0.0"}%`,
+    };
+  });
 
   return (
     <div className="space-y-5">
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_280px] xl:items-start">
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_260px] lg:items-start">
         <div>
           <h1 className="text-[30px] font-bold tracking-[-0.02em] text-ledger-ink">
             Good morning, Alex
@@ -354,7 +355,7 @@ export default function OverviewDashboard({ bundle, recentActivity, store }) {
             Here&apos;s what&apos;s happening with {bundle.project.name} today.
           </p>
         </div>
-        <div className="justify-self-start rounded-[16px] border border-[#E3EBF7] bg-white px-4 py-3 xl:justify-self-end">
+        <div className="justify-self-start rounded-[16px] border border-[#E3EBF7] bg-white px-4 py-3 lg:justify-self-end">
           <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#8FA0BE]">
             Reporting period
           </div>
@@ -377,26 +378,26 @@ export default function OverviewDashboard({ bundle, recentActivity, store }) {
           <KpiCard
             icon="conversions"
             label="Conversions"
-            value={formatNumber(bundle.kpis.conversions.current)}
+            value={formatNumber(totalConversions)}
             change="Up 23.4%"
             comparison={reportingWindow.comparisonLabel}
-            sparkline={bundle.kpis.conversions.sparkline}
+            sparkline={bundle.series.map((item) => item.conversions)}
           />
           <KpiCard
             icon="cpl"
             label="Cost per Lead"
-            value={formatCurrency(bundle.kpis.costPerLead.current, "USD")}
+            value={formatCurrency(costPerLead, "USD")}
             change="Down 8.3%"
             comparison={reportingWindow.comparisonLabel}
-            sparkline={bundle.kpis.costPerLead.sparkline}
+            sparkline={bundle.series.map((item) => item.spend / Math.max(1, item.leads))}
           />
           <KpiCard
             icon="roi"
             label="ROI"
-            value={`${bundle.kpis.roi.current.toFixed(2)}x`}
+            value={`${roi.toFixed(2)}x`}
             change="Up 12.7%"
             comparison={reportingWindow.comparisonLabel}
-            sparkline={bundle.kpis.roi.sparkline}
+            sparkline={bundle.series.map((item) => (item.spend ? item.conversions / item.spend : 0))}
           />
         </div>
 
@@ -453,7 +454,7 @@ export default function OverviewDashboard({ bundle, recentActivity, store }) {
         <SectionCard
           title="Performance Overview"
           action={
-            <div className="flex items-center gap-4">
+            <div className="flex flex-wrap items-center gap-3">
               <div className="hidden items-center gap-4 text-[13px] text-slate-500 md:flex">
                 <span className="flex items-center gap-2">
                   <span className="h-2.5 w-2.5 rounded-full bg-[#2B58E8]" />
@@ -528,8 +529,8 @@ export default function OverviewDashboard({ bundle, recentActivity, store }) {
         </SectionCard>
 
         <SectionCard title="Leads by Channel" className="relative">
-          <div className="flex items-center gap-4">
-            <div className="relative flex h-[244px] w-[244px] items-center justify-center">
+          <div className="flex flex-col gap-6 lg:flex-row lg:items-center">
+            <div className="relative mx-auto flex h-[220px] w-[220px] items-center justify-center sm:h-[244px] sm:w-[244px]">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
@@ -590,18 +591,19 @@ export default function OverviewDashboard({ bundle, recentActivity, store }) {
             </Link>
           }
         >
-          <div className="grid grid-cols-[1.8fr_0.6fr_0.8fr_0.6fr] gap-3 px-1 pb-3 text-[12px] uppercase tracking-[0.12em] text-slate-400">
+          <div className="hidden grid-cols-[1.8fr_0.6fr_0.8fr_0.6fr] gap-3 px-1 pb-3 text-[12px] uppercase tracking-[0.12em] text-slate-400 md:grid">
             <span>Campaign</span>
-            <span>Leads</span>
+            <span>Spend</span>
             <span>Conversions</span>
-            <span>ROI</span>
+            <span>CPL</span>
           </div>
           <div className="space-y-4">
             {(bundle.topCampaigns || bundle.campaigns).map((campaign, index) => (
               <div
                 key={campaign.id}
-                className="grid grid-cols-[1.8fr_0.6fr_0.8fr_0.6fr_0.28fr] items-center gap-3 text-[14px]"
+                className="rounded-[18px] border border-[#E8EEF8] p-4 md:border-0 md:p-0"
               >
+                <div className="grid items-center gap-3 text-[14px] md:grid-cols-[1.8fr_0.6fr_0.8fr_0.6fr_0.28fr]">
                 <div className="flex items-center gap-3">
                   <div
                     className="flex h-9 w-9 items-center justify-center rounded-xl text-sm font-semibold text-white"
@@ -614,28 +616,20 @@ export default function OverviewDashboard({ bundle, recentActivity, store }) {
                       {campaign.name}
                     </div>
                     <div className="mt-0.5 text-[13px] text-slate-500">
-                      {campaign.channel === "Paid"
-                        ? "Paid Social"
-                        : campaign.channel === "Social"
-                          ? "Google Ads"
-                          : campaign.channel === "Email"
-                            ? "Email Marketing"
-                            : "Organic Search"}
+                      {channelLabelMap[campaign.channel] || campaign.channel}
                     </div>
                   </div>
                 </div>
+                <div className="text-slate-600">{formatCurrency(campaign.spent)}</div>
                 <div className="text-slate-600">
-                  {Math.max(20, Math.round(campaign.conversions * 0.29))}
+                  {campaign.conversions}
                 </div>
                 <div className="text-slate-600">
-                  {Math.max(5, Math.round(campaign.conversions * 0.085))}
-                </div>
-                <div className="text-slate-600">
-                  {(campaign.spent
-                    ? (campaign.clicks / campaign.spent) * 3
-                    : 0
-                  ).toFixed(2)}
-                  x
+                  {formatCurrency(
+                    campaign.conversions
+                      ? campaign.spent / Math.max(1, campaign.conversions)
+                      : 0,
+                  )}
                 </div>
                 <div className="h-2 rounded-full bg-slate-100">
                   <div
@@ -645,6 +639,7 @@ export default function OverviewDashboard({ bundle, recentActivity, store }) {
                       backgroundColor: campaignAccent(index),
                     }}
                   />
+                </div>
                 </div>
               </div>
             ))}
@@ -672,15 +667,9 @@ export default function OverviewDashboard({ bundle, recentActivity, store }) {
                   <div
                     className="flex h-8 items-center justify-between rounded-xl px-3 text-[13px] font-medium"
                     style={{
-                      width: `${100 - index * 15}%`,
+                      width: `${totalLeads ? Math.max(18, (stage.count / totalLeads) * 100) : 18}%`,
                       color: index === 0 ? "#fff" : "#183153",
-                      background: [
-                        "linear-gradient(90deg,#3C72FF,#2B58E8)",
-                        "linear-gradient(90deg,#C8DAFF,#B3CEFF)",
-                        "linear-gradient(90deg,#D7EEFF,#C2E6FF)",
-                        "linear-gradient(90deg,#D9F8F1,#C9F0E5)",
-                        "linear-gradient(90deg,#E8E1FF,#DDD4FB)",
-                      ][index],
+                      backgroundColor: ["#2B58E8", "#BFD1FF", "#D5E7FF", "#DDF6EF"][index],
                     }}
                   >
                     <span>{stage.label}</span>
@@ -707,7 +696,7 @@ export default function OverviewDashboard({ bundle, recentActivity, store }) {
           }
         >
           <div className="ledger-scrollbar max-h-[440px] space-y-3 overflow-y-auto pr-1">
-            {(bundle.upcomingTasks || bundle.tasks).map((task) => {
+            {(bundle.upcomingTasks || tasks).map((task) => {
                 const done = task.column === "Done";
                 return (
                   <div
@@ -769,8 +758,20 @@ export default function OverviewDashboard({ bundle, recentActivity, store }) {
 
       <div className="flex flex-col items-start justify-between gap-4 rounded-[18px] border border-[#DCE7F8] bg-[#F7FAFF] px-5 py-4 shadow-[0_8px_24px_rgba(43,88,232,0.04)] md:flex-row md:items-center">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-[12px] bg-white text-ledger-blue shadow-sm">
-            *
+          <div className="flex h-10 w-10 items-center justify-center rounded-[12px] border border-[#DCE7F8] bg-white text-ledger-blue shadow-sm">
+            <svg
+              viewBox="0 0 20 20"
+              className="h-6 w-6"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+            >
+              <path
+                d="M4 13.5h3.5l2-3 2.5 2.5L16 7"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
           </div>
           <p className="text-[15px] text-[#5E6E90]">
             You&apos;re doing great! Your lead conversion rate is up 23%
