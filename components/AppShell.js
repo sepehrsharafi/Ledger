@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Logo from "@/components/Logo";
 import { useAppContext } from "@/context/AppContext";
+import { useShellData } from "@/lib/useLedgerData";
 import { cn } from "@/lib/utils";
 import {
   BellIcon,
@@ -97,7 +98,8 @@ export default function AppShell({
 }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { isAuthenticated, isStoreHydrated, logout, store, viewerRole } = useAppContext();
+  const { isAuthenticated, isStoreHydrated, logout, viewerRole } = useAppContext();
+  const { projects, teamMembers, unreadCount } = useShellData();
   const [menuOpen, setMenuOpen] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [projectMenuOpen, setProjectMenuOpen] = useState(false);
@@ -114,18 +116,12 @@ export default function AppShell({
   const currentProject = isProjectsHub
     ? null
     : project ||
-      store.projects.find((item) => item.id === queryProjectId) ||
+      projects.find((item) => item.id === queryProjectId) ||
       null;
   const userProfile =
-    store.teamMembers.find((member) => member.name === "Alex Morgan") ||
-    store.teamMembers[0];
+    teamMembers.find((member) => member.name === "Alex Morgan") ||
+    teamMembers[0];
   const userInitials = initials(userProfile?.name || "Alex Morgan");
-  const unreadCount = useMemo(
-    () =>
-      store.approvals.filter((item) => item.status === "Pending").length +
-      store.tasks.filter((item) => item.column === "Review").length,
-    [store.approvals, store.tasks],
-  );
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -200,7 +196,7 @@ export default function AppShell({
       return { ...item, href, active };
     });
 
-  const otherProjects = store.projects.filter(
+  const otherProjects = projects.filter(
     (item) => item.id !== currentProject?.id,
   );
 

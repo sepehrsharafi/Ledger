@@ -5,7 +5,7 @@ import { useState } from "react";
 import AppShell from "@/components/AppShell";
 import Badge from "@/components/Badge";
 import ProjectFormModal from "@/components/ProjectFormModal";
-import { useAppContext } from "@/context/AppContext";
+import { useProjectsHubData } from "@/lib/useLedgerData";
 
 function StatBlock({ label, value, accent = false }) {
   return (
@@ -26,7 +26,7 @@ function StatBlock({ label, value, accent = false }) {
 
 export default function ProjectsHubPage() {
   const router = useRouter();
-  const { selectors, addProject } = useAppContext();
+  const { addProject, projectCards } = useProjectsHubData();
   const [modalOpen, setModalOpen] = useState(false);
 
   async function handleCreateProject(form) {
@@ -53,7 +53,7 @@ export default function ProjectsHubPage() {
       </div>
 
       <div className="grid gap-5 lg:grid-cols-2 2xl:grid-cols-3">
-        {selectors.projectCards.map((project) => (
+        {projectCards.map((project) => (
           <button
             key={project.id}
             onClick={() => router.push(`/projects/${project.id}`)}

@@ -24,7 +24,8 @@ export async function handleCollectionRequest(collection, request) {
 
   if (request.method === "GET") {
     try {
-      return json({ collection, records: await listRecords(collection) });
+      const filters = Object.fromEntries(new URL(request.url).searchParams.entries());
+      return json({ collection, records: await listRecords(collection, filters) });
     } catch (error) {
       return json({ error: error.message }, error.status || 500);
     }

@@ -1,7 +1,7 @@
 "use client";
 
 import AppShell from "@/components/AppShell";
-import { useAppContext } from "@/context/AppContext";
+import { useSettingsData } from "@/lib/useLedgerData";
 
 function Toggle({ enabled, onClick }) {
   return (
@@ -24,7 +24,7 @@ function Panel({ title, children, className = "" }) {
 }
 
 export default function SettingsPage() {
-  const { store, toggleIntegration, toggleNotification } = useAppContext();
+  const { store, toggleIntegration, toggleNotification } = useSettingsData();
   const settings = store.agencySettings;
 
   return (

@@ -118,6 +118,28 @@ async function queryRows(query, params = []) {
   return db.unsafe(query, params);
 }
 
+function buildFilterClause(collection, filters = {}, startIndex = 1) {
+  const config = getBackendCollectionConfig(collection);
+  const entries = Object.entries(filters).filter(
+    ([field, value]) =>
+      value !== undefined &&
+      value !== null &&
+      value !== "" &&
+      Object.prototype.hasOwnProperty.call(config.columns, field),
+  );
+
+  if (!entries.length) {
+    return { clause: "", params: [] };
+  }
+
+  return {
+    clause: ` where ${entries
+      .map(([field], index) => `${config.columns[field]} = $${startIndex + index}`)
+      .join(" and ")}`,
+    params: entries.map(([, value]) => value),
+  };
+}
+
 export async function getRuntimeSnapshot() {
   const snapshot = {};
 
@@ -130,13 +152,14 @@ export async function getRuntimeSnapshot() {
   return snapshot;
 }
 
-export async function getCollectionRecords(collection) {
+export async function getCollectionRecords(collection, filters = {}) {
   if (!isBackendCollection(collection)) {
     throw new Error(`Unknown backend collection: ${collection}`);
   }
 
   const config = getBackendCollectionConfig(collection);
-  const rows = await queryRows(`select * from ${config.table}`);
+  const where = buildFilterClause(collection, filters);
+  const rows = await queryRows(`select * from ${config.table}${where.clause}`, where.params);
   return rows.map((row) => mapRowToRecord(collection, row));
 }
 
@@ -225,8 +248,8 @@ export async function deleteRecord(collection, recordId) {
   return rows.length > 0;
 }
 
-export async function listRecords(collection) {
-  return getCollectionRecords(collection);
+export async function listRecords(collection, filters = {}) {
+  return getCollectionRecords(collection, filters);
 }
 
 export async function truncateAllCollections() {

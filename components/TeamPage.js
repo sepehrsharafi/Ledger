@@ -1,17 +1,21 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import AppShell from "@/components/AppShell";
 import Badge from "@/components/Badge";
 import Drawer from "@/components/Drawer";
-import { useAppContext } from "@/context/AppContext";
+import { useTeamPageData } from "@/lib/useLedgerData";
 
 export default function TeamPage() {
-  const { store, toggleTeamMemberAssignment } = useAppContext();
+  const { store, toggleTeamMemberAssignment } = useTeamPageData();
   const [selectedMember, setSelectedMember] = useState(null);
-  const [selectedProjectId, setSelectedProjectId] = useState(
-    store.projects[0]?.id || "",
-  );
+  const [selectedProjectId, setSelectedProjectId] = useState("");
+
+  useEffect(() => {
+    if (!selectedProjectId && store.projects[0]?.id) {
+      setSelectedProjectId(store.projects[0].id);
+    }
+  }, [selectedProjectId, store.projects]);
 
   const selectedProject = useMemo(
     () => store.projects.find((project) => project.id === selectedProjectId),

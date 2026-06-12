@@ -25,7 +25,12 @@ import Modal from "@/components/Modal";
 import Drawer from "@/components/Drawer";
 import EmptyState from "@/components/EmptyState";
 import { ModuleSkeleton, SkeletonBlock } from "@/components/Skeleton";
-import { useAppContext } from "@/context/AppContext";
+import {
+  useProjectLeadsData,
+  useProjectModuleData,
+  useProjectOverviewData,
+  useShellData,
+} from "@/lib/useLedgerData";
 import {
   calculateChange,
   cn,
@@ -202,21 +207,31 @@ function OverviewScreen({ bundle, recentActivity, store }) {
 }
 
 function LeadsScreen({
-  bundle,
+  project,
+  leads,
+  summary,
+  filterOptions,
   onStatusChange,
   onNote,
   onUpdateLead,
   onCreateLead,
-  getLeadActivities,
-  store,
+  onDeleteLead,
+  onOpenLead,
+  onCloseLead,
+  selectedLead,
+  isLeadDetailLoading,
+  teamMembers,
+  query,
+  setQuery,
+  statusFilter,
+  setStatusFilter,
+  sourceFilter,
+  setSourceFilter,
+  assigneeFilter,
+  setAssigneeFilter,
 }) {
   const [view, setView] = useState("table");
-  const [query, setQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState("All");
-  const [sourceFilter, setSourceFilter] = useState("All");
-  const [assigneeFilter, setAssigneeFilter] = useState("All");
   const [draggedLeadId, setDraggedLeadId] = useState(null);
-  const [selectedLead, setSelectedLead] = useState(null);
   const [note, setNote] = useState("");
   const [leadComposerOpen, setLeadComposerOpen] = useState(false);
   const [leadDraft, setLeadDraft] = useState({
@@ -231,7 +246,7 @@ function LeadsScreen({
     assignedTeamMember: "Alex Morgan",
   });
 
-  if (!bundle.leads.length) {
+  if (!summary.total && !leads.length) {
     return (
       <EmptyState
         title="No leads yet. Add your first lead or connect a source."
@@ -240,40 +255,14 @@ function LeadsScreen({
     );
   }
 
-  const summary = {
-    total: bundle.leads.length,
-    statusCounts: bundle.leads.reduce((acc, lead) => {
-      acc[lead.status] = (acc[lead.status] || 0) + 1;
-      return acc;
-    }, {}),
-    conversionRate: bundle.leads.length
-      ? (bundle.leads.filter((lead) => lead.status === "Won").length /
-          bundle.leads.length) *
-        100
-      : 0,
-  };
-  const sources = ["All", ...new Set(bundle.leads.map((lead) => lead.source))];
-  const assignedPeople = [
-    "All",
-    ...store.teamMembers.map((member) => member.name),
-  ];
-  const filtered = bundle.leads.filter((lead) => {
-    const matchQuery = [lead.name, lead.company, lead.email]
-      .join(" ")
-      .toLowerCase()
-      .includes(query.toLowerCase());
-    const matchStatus = statusFilter === "All" || lead.status === statusFilter;
-    const matchSource = sourceFilter === "All" || lead.source === sourceFilter;
-    const matchAssignee =
-      assigneeFilter === "All" || lead.assignedTeamMember === assigneeFilter;
-    return matchQuery && matchStatus && matchSource && matchAssignee;
-  });
+  const sources = ["All", ...filterOptions.sources];
+  const assignedPeople = ["All", ...filterOptions.assignedPeople];
   const leadDraftIsValid =
     leadDraft.name.trim() && leadDraft.email.trim() && leadDraft.source;
 
-  function openLead(lead) {
-    setSelectedLead({ ...lead });
+  async function openLead(lead) {
     setNote("");
+    await onOpenLead(lead.id);
   }
 
   function resetLeadDraft() {
@@ -286,7 +275,7 @@ function LeadsScreen({
       status: "New",
       estimatedValue: "",
       capturedFrom: "",
-      assignedTeamMember: store.teamMembers[0]?.name || "Alex Morgan",
+      assignedTeamMember: teamMembers[0]?.name || "Alex Morgan",
     });
   }
 
@@ -436,7 +425,7 @@ function LeadsScreen({
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((lead) => (
+                  {leads.map((lead) => (
                     <tr
                       key={lead.id}
                       onClick={() => openLead(lead)}
@@ -480,7 +469,7 @@ function LeadsScreen({
         ) : (
           <div className="grid gap-4 xl:grid-cols-5">
             {allowedLeadStatuses.map((status, columnIndex) => {
-              const items = filtered.filter((lead) => lead.status === status);
+              const items = leads.filter((lead) => lead.status === status);
               const columnValue = items.reduce(
                 (total, lead) => total + (Number(lead.estimatedValue) || 0),
                 0,
@@ -528,7 +517,7 @@ function LeadsScreen({
                   </div>
                   <div className="space-y-3">
                     {items.map((lead, leadIndex) => {
-                      const member = store.teamMembers.find(
+                      const member = teamMembers.find(
                         (item) => item.name === lead.assignedTeamMember,
                       );
                       const initials = lead.assignedTeamMember
@@ -610,7 +599,7 @@ function LeadsScreen({
       </div>
       <Drawer
         open={Boolean(selectedLead)}
-        onClose={() => setSelectedLead(null)}
+        onClose={onCloseLead}
         title={selectedLead?.name || "Lead Details"}
       >
         {selectedLead ? (
@@ -639,15 +628,6 @@ function LeadsScreen({
                     key={item}
                     onClick={() => {
                       onStatusChange(selectedLead.id, item);
-                      setSelectedLead((current) => ({
-                        ...current,
-                        status: item,
-                      }));
-                      onUpdateLead(selectedLead.id, {
-                        lastContactedDate: new Date()
-                          .toISOString()
-                          .slice(0, 10),
-                      });
                     }}
                     className={cn(
                       "rounded-full border px-4 py-2 text-sm font-semibold transition",
@@ -666,7 +646,7 @@ function LeadsScreen({
                 Activity Timeline
               </div>
               <div className="mt-4 space-y-4">
-                {getLeadActivities(selectedLead.id).map((activity) => (
+                {(selectedLead.activities || []).map((activity) => (
                   <div
                     key={activity.id}
                     className="rounded-[16px] bg-[#F8FAFD] p-4"
@@ -703,14 +683,25 @@ function LeadsScreen({
                 className="ledger-textarea mt-4"
                 placeholder="Capture a new client-facing note..."
               />
-              <button
-                onClick={() => {
-                  onNote(selectedLead.id, note);
+                  <button
+                onClick={async () => {
+                  await onNote(selectedLead.id, note);
                   setNote("");
                 }}
                 className="ledger-button ledger-button-primary mt-4 min-w-[140px]"
               >
                 Save Note
+              </button>
+            </div>
+            <div className="flex justify-end border-t border-[#E6EDF8] pt-4">
+              <button
+                onClick={async () => {
+                  await onDeleteLead(selectedLead.id);
+                  onCloseLead();
+                }}
+                className="rounded-[14px] border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-100"
+              >
+                Delete Lead
               </button>
             </div>
           </div>
@@ -801,7 +792,7 @@ function LeadsScreen({
                 }
                 className="ledger-select"
               >
-                {store.teamMembers.map((member) => (
+                {teamMembers.map((member) => (
                   <option key={member.id}>{member.name}</option>
                 ))}
               </select>
@@ -814,7 +805,7 @@ function LeadsScreen({
                 if (!leadDraftIsValid) {
                   return;
                 }
-                onCreateLead(bundle.project.id, leadDraft);
+                onCreateLead(project.id, leadDraft);
                 setLeadComposerOpen(false);
                 resetLeadDraft();
               }}
@@ -829,7 +820,12 @@ function LeadsScreen({
   );
 }
 
-function CampaignsScreen({ bundle, onCreateCampaign, onUpdateCampaign }) {
+function CampaignsScreen({
+  bundle,
+  onCreateCampaign,
+  onUpdateCampaign,
+  onDeleteCampaign,
+}) {
   const [selectedCampaign, setSelectedCampaign] = useState(null);
   const [statusFilter, setStatusFilter] = useState("All");
   const [channelFilter, setChannelFilter] = useState("All");
@@ -1191,7 +1187,16 @@ function CampaignsScreen({ bundle, onCreateCampaign, onUpdateCampaign }) {
                 </div>
               </div>
             </div>
-            <div className="flex justify-end">
+            <div className="flex items-center justify-between gap-3">
+              <button
+                onClick={async () => {
+                  await onDeleteCampaign(selectedCampaign.id);
+                  setSelectedCampaign(null);
+                }}
+                className="rounded-[14px] border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-100"
+              >
+                Delete Campaign
+              </button>
               <button
                 disabled={!String(selectedCampaign.name).trim()}
                 onClick={() => {
@@ -1335,7 +1340,13 @@ function CampaignsScreen({ bundle, onCreateCampaign, onUpdateCampaign }) {
   );
 }
 
-function CalendarScreen({ bundle, onCreateEvent, onUpdateEvent, store }) {
+function CalendarScreen({
+  bundle,
+  onCreateEvent,
+  onUpdateEvent,
+  onDeleteEvent,
+  store,
+}) {
   const [monthOffset, setMonthOffset] = useState(0);
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [selectedDay, setSelectedDay] = useState(null);
@@ -1626,7 +1637,16 @@ function CalendarScreen({ bundle, onCreateEvent, onUpdateEvent, store }) {
                 This calendar item is overdue.
               </div>
             ) : null}
-            <div className="flex justify-end">
+            <div className="flex items-center justify-between gap-3">
+              <button
+                onClick={async () => {
+                  await onDeleteEvent(selectedEvent.id);
+                  setSelectedEvent(null);
+                }}
+                className="rounded-[14px] border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-100"
+              >
+                Delete Item
+              </button>
               <button
                 disabled={!String(selectedEvent.title).trim()}
                 onClick={() => {
@@ -1754,6 +1774,7 @@ function TasksScreen({
   onMoveTask,
   onCreateTask,
   onUpdateTask,
+  onDeleteTask,
   store,
 }) {
   const [draggedTaskId, setDraggedTaskId] = useState(null);
@@ -2050,7 +2071,16 @@ function TasksScreen({
                 ))}
               </select>
             </label>
-            <div className="sm:col-span-2 flex justify-end">
+            <div className="sm:col-span-2 flex items-center justify-between gap-3">
+              <button
+                onClick={async () => {
+                  await onDeleteTask(selectedTask.id);
+                  setSelectedTask(null);
+                }}
+                className="rounded-[14px] border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-100"
+              >
+                Delete Task
+              </button>
               <button
                 disabled={!String(selectedTask.title).trim()}
                 onClick={() => {
@@ -2281,6 +2311,7 @@ function ApprovalWorkbench({
   onStatusChange,
   onComment,
   onCreateApproval,
+  onDeleteApproval,
   store,
 }) {
   const [selectedApproval, setSelectedApproval] = useState(null);
@@ -2546,6 +2577,17 @@ function ApprovalWorkbench({
                 className="ledger-button ledger-button-primary mt-3 h-10 px-4 text-sm"
               >
                 Add Comment
+              </button>
+            </div>
+            <div className="flex justify-end border-t border-[#E6EDF8] pt-4">
+              <button
+                onClick={async () => {
+                  await onDeleteApproval(selectedApprovalData.id);
+                  setSelectedApproval(null);
+                }}
+                className="rounded-[14px] border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-100"
+              >
+                Delete Request
               </button>
             </div>
           </div>
@@ -3295,33 +3337,65 @@ function ProjectTeamScreen({ bundle, store, onToggleAssignment }) {
 }
 
 export default function ProjectModulePage({ projectId, module }) {
+  const { projects, isLoading: isShellLoading } = useShellData();
+  const shellProject = projects.find((item) => item.id === projectId) || null;
+  const overviewData = useProjectOverviewData(projectId, module === "overview");
+  const leadsData = useProjectLeadsData(projectId, module === "leads");
   const {
     selectors,
     store,
+    isLoading: isDataLoading,
     updateLeadStatus,
     createLead,
     updateLead,
+    deleteLead,
     addLeadNote,
     updateTaskColumn,
     createTask,
     updateTask,
+    deleteTask,
     updateApprovalStatus,
     addApprovalComment,
+    deleteApproval,
     updateReportConfig,
     updateProject,
     createCampaign,
     updateCampaign,
+    deleteCampaign,
     createApproval,
     toggleTeamMemberAssignment,
     createCalendarEvent,
     updateCalendarEvent,
-  } = useAppContext();
+    deleteCalendarEvent,
+  } = useProjectModuleData(projectId, module);
   const loading = useDemoLoading(`${projectId}-${module}`);
-  const bundle = selectors.getProjectBundle(projectId);
-  const recentActivity = selectors.getRecentProjectActivity(projectId);
   const moduleMeta = moduleTitles[module];
+  const bundle =
+    module === "overview"
+      ? overviewData.bundle
+      : selectors.getProjectBundle(projectId);
+  const recentActivity =
+    module === "overview"
+      ? overviewData.recentActivity
+      : selectors.getRecentProjectActivity(projectId);
+  const effectiveProject =
+    module === "overview"
+      ? overviewData.bundle?.project || shellProject
+      : module === "leads"
+        ? leadsData.project || shellProject
+        : bundle.project || shellProject;
+  const effectiveStore =
+    module === "overview"
+      ? { teamMembers: overviewData.teamMembers }
+      : store;
+  const effectiveLoading =
+    module === "overview"
+      ? overviewData.isLoading || isShellLoading
+      : module === "leads"
+        ? leadsData.isSummaryLoading || leadsData.isListLoading || isShellLoading
+        : isDataLoading || isShellLoading;
 
-  if (!bundle.project) {
+  if (!effectiveProject && !effectiveLoading) {
     return (
       <AppShell
         title="Project Not Found"
@@ -3347,7 +3421,7 @@ export default function ProjectModulePage({ projectId, module }) {
     return (
       <div className="min-h-screen bg-[radial-gradient(circle_at_top,rgba(91,130,245,0.12),transparent_24%)] px-4 py-8 sm:px-6 xl:px-8">
         <div className="mx-auto max-w-[1380px]">
-          {loading ? (
+          {loading || effectiveLoading ? (
             <ModuleSkeleton cards={4} rows={3} />
           ) : (
             <ClientViewScreen bundle={bundle} />
@@ -3362,18 +3436,33 @@ export default function ProjectModulePage({ projectId, module }) {
       <OverviewScreen
         bundle={bundle}
         recentActivity={recentActivity}
-        store={store}
+        store={effectiveStore}
       />
     ),
     leads: (
       <LeadsScreen
-        bundle={bundle}
-        onStatusChange={updateLeadStatus}
-        onCreateLead={createLead}
-        onUpdateLead={updateLead}
-        onNote={addLeadNote}
-        getLeadActivities={selectors.getLeadActivities}
-        store={store}
+        project={effectiveProject}
+        leads={leadsData.leads}
+        summary={leadsData.summary}
+        filterOptions={leadsData.filters}
+        onStatusChange={leadsData.updateLeadStatus}
+        onCreateLead={leadsData.createLead}
+        onUpdateLead={leadsData.updateLead}
+        onDeleteLead={leadsData.deleteLead}
+        onNote={leadsData.addLeadNote}
+        onOpenLead={leadsData.openLead}
+        onCloseLead={leadsData.closeLead}
+        selectedLead={leadsData.selectedLead}
+        isLeadDetailLoading={leadsData.isLeadDetailLoading}
+        teamMembers={leadsData.teamMembers}
+        query={leadsData.query}
+        setQuery={leadsData.setQuery}
+        statusFilter={leadsData.statusFilter}
+        setStatusFilter={leadsData.setStatusFilter}
+        sourceFilter={leadsData.sourceFilter}
+        setSourceFilter={leadsData.setSourceFilter}
+        assigneeFilter={leadsData.assigneeFilter}
+        setAssigneeFilter={leadsData.setAssigneeFilter}
       />
     ),
     campaigns: (
@@ -3381,6 +3470,7 @@ export default function ProjectModulePage({ projectId, module }) {
         bundle={bundle}
         onCreateCampaign={createCampaign}
         onUpdateCampaign={updateCampaign}
+        onDeleteCampaign={deleteCampaign}
       />
     ),
     calendar: (
@@ -3388,6 +3478,7 @@ export default function ProjectModulePage({ projectId, module }) {
         bundle={bundle}
         onCreateEvent={createCalendarEvent}
         onUpdateEvent={updateCalendarEvent}
+        onDeleteEvent={deleteCalendarEvent}
         store={store}
       />
     ),
@@ -3397,6 +3488,7 @@ export default function ProjectModulePage({ projectId, module }) {
         onMoveTask={updateTaskColumn}
         onCreateTask={createTask}
         onUpdateTask={updateTask}
+        onDeleteTask={deleteTask}
         store={store}
       />
     ),
@@ -3406,6 +3498,7 @@ export default function ProjectModulePage({ projectId, module }) {
         onStatusChange={updateApprovalStatus}
         onComment={addApprovalComment}
         onCreateApproval={createApproval}
+        onDeleteApproval={deleteApproval}
         store={store}
       />
     ),
@@ -3437,11 +3530,11 @@ export default function ProjectModulePage({ projectId, module }) {
     <AppShell
       title={shellTitle}
       subtitle={shellSubtitle}
-      project={bundle.project}
+      project={effectiveProject}
       projectSection={moduleMeta.title}
       hidePageHeading={module === "overview"}
     >
-      {loading ? (
+      {loading || effectiveLoading ? (
         <ModuleSkeleton
           cards={module === "tasks" ? 0 : 4}
           rows={5}

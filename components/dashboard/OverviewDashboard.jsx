@@ -242,7 +242,7 @@ function getReportingWindow(series = []) {
 }
 
 export default function OverviewDashboard({ bundle, recentActivity, store }) {
-  const totalLeads = bundle.leads.length;
+  const totalLeads = bundle.leadCount ?? bundle.leads.length;
   const previousLeadCount =
     bundle.series.at(-2)?.leads || Math.max(1, totalLeads - 20);
   const leadChange =
@@ -535,7 +535,7 @@ export default function OverviewDashboard({ bundle, recentActivity, store }) {
             <span>ROI</span>
           </div>
           <div className="space-y-4">
-            {bundle.campaigns.slice(0, 4).map((campaign, index) => (
+            {(bundle.topCampaigns || bundle.campaigns).map((campaign, index) => (
               <div
                 key={campaign.id}
                 className="grid grid-cols-[1.8fr_0.6fr_0.8fr_0.6fr_0.28fr] items-center gap-3 text-[14px]"
@@ -645,11 +645,7 @@ export default function OverviewDashboard({ bundle, recentActivity, store }) {
           }
         >
           <div className="space-y-3">
-            {bundle.tasks
-              .slice()
-              .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate))
-              .slice(0, 6)
-              .map((task, index) => {
+            {(bundle.upcomingTasks || bundle.tasks).map((task, index) => {
                 const done = task.column === "Done";
                 return (
                   <div
