@@ -4,12 +4,14 @@ import { useEffect, useMemo, useState } from "react";
 import AppShell from "@/components/AppShell";
 import Badge from "@/components/Badge";
 import Drawer from "@/components/Drawer";
+import Modal from "@/components/Modal";
 import { useTeamPageData } from "@/lib/useLedgerData";
 
 export default function TeamPage() {
   const { store, toggleTeamMemberAssignment } = useTeamPageData();
   const [selectedMember, setSelectedMember] = useState(null);
   const [selectedProjectId, setSelectedProjectId] = useState("");
+  const [pendingUnassign, setPendingUnassign] = useState(null);
 
   useEffect(() => {
     if (!selectedProjectId && store.projects[0]?.id) {
@@ -28,6 +30,20 @@ export default function TeamPage() {
   const availableMembers = store.teamMembers.filter(
     (member) => !member.assignedProjectIds.includes(selectedProjectId),
   );
+
+  async function handleAssignmentToggle(memberId, options = {}) {
+    const result = await toggleTeamMemberAssignment(
+      selectedProjectId,
+      memberId,
+      options,
+    );
+
+    if (result?.status === "requires-confirmation") {
+      setPendingUnassign(result);
+    } else if (result?.status === "updated") {
+      setPendingUnassign(null);
+    }
+  }
 
   return (
     <AppShell title="Team" subtitle="Agency capacity, ownership, and workload in one place.">
@@ -116,9 +132,7 @@ export default function TeamPage() {
                     </div>
                   </button>
                   <button
-                    onClick={() =>
-                      toggleTeamMemberAssignment(selectedProjectId, member.id)
-                    }
+                    onClick={() => handleAssignmentToggle(member.id)}
                     className="rounded-full border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-100"
                   >
                     Unassign
@@ -170,9 +184,7 @@ export default function TeamPage() {
                     </div>
                   </button>
                   <button
-                    onClick={() =>
-                      toggleTeamMemberAssignment(selectedProjectId, member.id)
-                    }
+                    onClick={() => handleAssignmentToggle(member.id)}
                     className="rounded-full border border-ledger-blue/20 bg-[#EEF4FF] px-3 py-2 text-sm font-semibold text-ledger-blue transition hover:bg-[#DDE8FF]"
                   >
                     Assign
@@ -219,6 +231,56 @@ export default function TeamPage() {
           </div>
         ) : null}
       </Drawer>
+      <Modal
+        open={Boolean(pendingUnassign)}
+        onClose={() => setPendingUnassign(null)}
+        title="Unassign Team Member?"
+        footer={
+          <>
+            <button
+              onClick={() => setPendingUnassign(null)}
+              className="ledger-button-secondary rounded-[14px] px-4 py-2 text-sm text-slate-600"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() =>
+                handleAssignmentToggle(pendingUnassign.member.id, {
+                  force: true,
+                })
+              }
+              className="rounded-[14px] bg-rose-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-rose-700"
+            >
+              Unassign Anyway
+            </button>
+          </>
+        }
+      >
+        {pendingUnassign ? (
+          <div className="space-y-4">
+            <p className="text-[15px] leading-7 text-[#5E6E90]">
+              {pendingUnassign.member.name} still has {pendingUnassign.taskCount} task
+              {pendingUnassign.taskCount === 1 ? "" : "s"} assigned in this project.
+              Unassigning them may leave work without a clear owner.
+            </p>
+            <div className="rounded-[18px] bg-[#F8FAFD] p-4">
+              <div className="text-[12px] font-semibold uppercase tracking-[0.18em] text-[#8FA0BE]">
+                Assigned Tasks
+              </div>
+              <div className="mt-3 space-y-2">
+                {pendingUnassign.assignedTasks.slice(0, 4).map((task) => (
+                  <div
+                    key={task.id}
+                    className="rounded-[14px] border border-[#E4EBF7] bg-white px-3 py-3 text-sm text-ledger-ink"
+                  >
+                    {task.title}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        ) : null}
+      </Modal>
     </AppShell>
   );
 }

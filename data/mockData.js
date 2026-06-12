@@ -41,7 +41,7 @@ const teamMembers = [
   {
     id: "tm-alex",
     name: "Alex Morgan",
-    email: "alex@ledger.demo",
+    email: "alex.morgan@ledgerstudio.co",
     role: "Admin",
     avatarColor: "#2B58E8",
     assignedProjectIds: projectSeeds.map((project) => project.id),
@@ -49,7 +49,7 @@ const teamMembers = [
   {
     id: "tm-isla",
     name: "Isla Chen",
-    email: "isla@ledger.demo",
+    email: "isla.chen@ledgerstudio.co",
     role: "Manager",
     avatarColor: "#5B82F5",
     assignedProjectIds: ["lumen-skincare", "northpeak-outdoor-co"],
@@ -57,7 +57,7 @@ const teamMembers = [
   {
     id: "tm-emma",
     name: "Emma Johnson",
-    email: "emma@ledger.demo",
+    email: "emma.johnson@ledgerstudio.co",
     role: "Member",
     avatarColor: "#0EA5A3",
     assignedProjectIds: ["lumen-skincare", "vaultline"],
@@ -65,7 +65,7 @@ const teamMembers = [
   {
     id: "tm-liam",
     name: "Liam Smith",
-    email: "liam@ledger.demo",
+    email: "liam.smith@ledgerstudio.co",
     role: "Member",
     avatarColor: "#F59E0B",
     assignedProjectIds: ["northpeak-outdoor-co"],
@@ -73,10 +73,34 @@ const teamMembers = [
   {
     id: "tm-noah",
     name: "Noah Williams",
-    email: "noah@ledger.demo",
+    email: "noah.williams@ledgerstudio.co",
     role: "Manager",
     avatarColor: "#10B981",
     assignedProjectIds: ["vaultline"],
+  },
+  {
+    id: "tm-priya",
+    name: "Priya Shah",
+    email: "priya.shah@ledgerstudio.co",
+    role: "Manager",
+    avatarColor: "#8B5CF6",
+    assignedProjectIds: ["lumen-skincare", "northpeak-outdoor-co"],
+  },
+  {
+    id: "tm-daniel",
+    name: "Daniel Kim",
+    email: "daniel.kim@ledgerstudio.co",
+    role: "Member",
+    avatarColor: "#EC4899",
+    assignedProjectIds: ["lumen-skincare", "vaultline"],
+  },
+  {
+    id: "tm-chloe",
+    name: "Chloe Bennett",
+    email: "chloe.bennett@ledgerstudio.co",
+    role: "Member",
+    avatarColor: "#14B8A6",
+    assignedProjectIds: ["northpeak-outdoor-co"],
   },
 ];
 
@@ -199,97 +223,252 @@ const goals = {
 };
 
 function createLead(projectId, index, overrides = {}) {
-  const sourcePool = ["Website form", "Manual", "Referral", "Paid ad", "Event"];
-  const statusPool = ["New", "Contacted", "Qualified", "Won", "Lost"];
   return {
     id: `${projectId}-lead-${index + 1}`,
     projectId,
     name: overrides.name || `Lead ${index + 1}`,
     email: overrides.email || `lead${index + 1}@example.com`,
     company: overrides.company || "Individual Customer",
-    phone: overrides.phone || `+1-555-01${String(index).padStart(2, "0")}`,
-    source: overrides.source || sourcePool[index % sourcePool.length],
-    status: overrides.status || statusPool[index % statusPool.length],
+    phone: overrides.phone || `+1-555-${String(1200 + index).padStart(4, "0")}`,
+    source: overrides.source || "Website form",
+    status: overrides.status || "New",
     estimatedValue: overrides.estimatedValue || 120 + (index % 8) * 35,
-    capturedFrom: overrides.capturedFrom || (index % 2 === 0 ? "Landing page" : "Retargeting campaign"),
+    capturedFrom: overrides.capturedFrom || "Landing page",
     assignedTeamMember: overrides.assignedTeamMember || teamMembers[index % teamMembers.length].name,
     createdDate: overrides.createdDate || `2026-05-${String((index % 28) + 1).padStart(2, "0")}`,
     lastContactedDate: overrides.lastContactedDate || `2026-06-${String((index % 11) + 1).padStart(2, "0")}`,
   };
 }
 
-const lumenLeadNames = [
-  "Aria Bell", "Mila Brooks", "Zoe Carter", "Ella Foster", "Mason Hall", "Ava Reed",
-  "Luca Hayes", "Ruby Price", "Nina Walsh", "Sage Turner", "Leah Cole", "Ivy Dean",
-];
+function buildContactNames(firstNames, lastNames, count) {
+  return Array.from({ length: count }, (_, index) => {
+    const firstName = firstNames[index % firstNames.length];
+    const lastName = lastNames[Math.floor(index / firstNames.length) % lastNames.length];
+    return `${firstName} ${lastName}`;
+  });
+}
 
-const northpeakLeadNames = [
-  "Owen Frost", "Maya Bennett", "Levi Stone", "Hannah Pike", "Ethan Marsh", "Lila Grant",
-  "Nora Fields", "Jack Carter", "Miles Avery", "Eva Quinn",
-];
+function getStatusByIndex(index, counts) {
+  let cursor = 0;
+  for (const [status, count] of counts) {
+    cursor += count;
+    if (index < cursor) {
+      return status;
+    }
+  }
+  return counts.at(-1)?.[0] || "New";
+}
+
+function buildConsumerEmail(name, domain) {
+  return `${name.toLowerCase().replace(/[^a-z0-9]+/g, ".").replace(/^\.+|\.+$/g, "")}@${domain}`;
+}
+
+function buildBusinessEmail(name, company) {
+  const companyDomain = company
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "")
+    .replace(/gmbh|inc|co|llc|group|labs|systems|analytics/g, "");
+  return `${name.toLowerCase().replace(/[^a-z0-9]+/g, ".").replace(/^\.+|\.+$/g, "")}@${companyDomain}.com`;
+}
+
+function buildLeadBatch({
+  projectId,
+  names,
+  emailDomain,
+  companies,
+  sources,
+  assignees,
+  statusCounts,
+  valueBase,
+  valueStep,
+  createdDayStart,
+  contactDayStart,
+}) {
+  return names.map((name, index) => {
+    const status = getStatusByIndex(index, statusCounts);
+    const sourceProfile = sources[index % sources.length];
+    const company = companies ? companies[index % companies.length] : "Individual Customer";
+    const assignedTeamMember = assignees[index % assignees.length];
+    const createdDay = ((createdDayStart + index) % 28) + 1;
+    const contactedDay = ((contactDayStart + index * 2) % 28) + 1;
+
+    return createLead(projectId, index, {
+      name,
+      email: emailDomain
+        ? buildConsumerEmail(name, emailDomain)
+        : buildBusinessEmail(name, company),
+      company,
+      source: sourceProfile.source,
+      status,
+      estimatedValue:
+        status === "Lost"
+          ? valueBase
+          : valueBase + (index % 7) * valueStep + (status === "Won" ? valueStep * 1.5 : 0),
+      capturedFrom: sourceProfile.capturedFrom,
+      assignedTeamMember,
+      createdDate: `2026-05-${String(createdDay).padStart(2, "0")}`,
+      lastContactedDate: `2026-06-${String(contactedDay).padStart(2, "0")}`,
+      phone: `+1-555-${String(2100 + index + createdDayStart * 3).padStart(4, "0")}`,
+    });
+  });
+}
+
+const lumenLeadNames = buildContactNames(
+  ["Ava", "Mila", "Zoey", "Sage", "Leah", "Nina", "Ella", "Ruby", "Aria", "Maya", "Chloe", "Ivy", "Lena", "Sophie"],
+  ["Carter", "Brooks", "Hayes", "Turner", "Cole", "Walsh", "Foster", "Price", "Bell", "Reed", "Parker", "Dean"],
+  42,
+);
+
+const northpeakLeadNames = buildContactNames(
+  ["Owen", "Levi", "Hannah", "Miles", "Nora", "Ethan", "Maya", "Lila", "Jack", "Eva", "Caleb", "Sadie"],
+  ["Frost", "Stone", "Pike", "Avery", "Fields", "Marsh", "Grant", "Holt", "Carter", "Quinn"],
+  28,
+);
+
+const vaultlineLeadNames = buildContactNames(
+  ["Amelia", "Felix", "Jonas", "Clara", "Sophie", "Matteo", "Lena", "Oliver"],
+  ["Weber", "Keller", "Hoffmann", "Roth", "Becker", "Schulz", "Meyer", "Fischer"],
+  16,
+);
 
 const vaultlineCompanies = [
-  "Nordspan Systems", "Hexa Core Capital", "Lynx Harbor Tech", "Praxis Grid", "Riverbank Metrics",
-  "Brightforge Finance", "Atlas Compliance", "Kitewave Analytics", "Bluewell Insurance", "Quantis Data",
+  "Nordspan Systems",
+  "Hexa Core Capital",
+  "Praxis Grid",
+  "Riverbank Metrics",
+  "Atlas Compliance",
+  "Brightforge Finance",
+  "Quantis Data",
+  "Bluewell Insurance",
 ];
 
 const leads = [
-  ...Array.from({ length: 120 }, (_, index) =>
-    createLead("lumen-skincare", index, {
-      name: lumenLeadNames[index % lumenLeadNames.length],
-      email: `${lumenLeadNames[index % lumenLeadNames.length].toLowerCase().replace(/ /g, ".")}@maildemo.com`,
-      source: ["Paid ad", "Website form", "Referral", "Paid ad", "Event"][index % 5],
-      status: index < 34 ? "New" : index < 64 ? "Contacted" : index < 94 ? "Qualified" : index < 108 ? "Won" : "Lost",
-      estimatedValue: 90 + (index % 9) * 25,
-      capturedFrom: index % 3 === 0 ? "Instagram lead form" : "Launch landing page",
-      assignedTeamMember: ["Alex Morgan", "Isla Chen", "Emma Johnson"][index % 3],
-    })
-  ),
-  ...Array.from({ length: 60 }, (_, index) =>
-    createLead("northpeak-outdoor-co", index, {
-      name: northpeakLeadNames[index % northpeakLeadNames.length],
-      email: `${northpeakLeadNames[index % northpeakLeadNames.length].toLowerCase().replace(/ /g, ".")}@northpeakmail.com`,
-      source: ["Website form", "Manual", "Referral", "Paid ad", "Event"][index % 5],
-      status: index < 16 ? "New" : index < 30 ? "Contacted" : index < 44 ? "Qualified" : index < 52 ? "Won" : "Lost",
-      estimatedValue: 180 + (index % 7) * 70,
-      capturedFrom: index % 2 === 0 ? "Winter guide download" : "Newsletter signup",
-      assignedTeamMember: ["Alex Morgan", "Isla Chen", "Liam Smith"][index % 3],
-    })
-  ),
-  ...Array.from({ length: 18 }, (_, index) =>
-    createLead("vaultline", index, {
-      name: ["Sophie Keller", "Jonas Meyer", "Amelia Roth", "Felix Weber", "Clara Hoffmann"][index % 5],
-      email: `contact${index + 1}@${vaultlineCompanies[index % vaultlineCompanies.length].toLowerCase().replace(/ /g, "").replace(/[^a-z]/g, "")}.com`,
-      company: vaultlineCompanies[index % vaultlineCompanies.length],
-      source: ["Paid ad", "Website form", "Referral", "Event", "Manual"][index % 5],
-      status: index < 4 ? "New" : index < 8 ? "Contacted" : index < 13 ? "Qualified" : index < 16 ? "Won" : "Lost",
-      estimatedValue: 18000 + (index % 6) * 7000,
-      capturedFrom: index % 2 === 0 ? "Demo request page" : "Fintech summit booth",
-      assignedTeamMember: ["Alex Morgan", "Emma Johnson", "Noah Williams"][index % 3],
-    })
-  ),
+  ...buildLeadBatch({
+    projectId: "lumen-skincare",
+    names: lumenLeadNames,
+    emailDomain: "lumenmail.com",
+    sources: [
+      { source: "Paid ad", capturedFrom: "Meta lead form - hydration quiz" },
+      { source: "Website form", capturedFrom: "Serum launch landing page" },
+      { source: "Referral", capturedFrom: "Creator ambassador referral" },
+      { source: "Email signup", capturedFrom: "Welcome flow signup form" },
+      { source: "Event", capturedFrom: "Pop-up skin consultation booth" },
+      { source: "Organic search", capturedFrom: "Routine finder article CTA" },
+    ],
+    assignees: ["Alex Morgan", "Isla Chen", "Emma Johnson", "Priya Shah", "Daniel Kim"],
+    statusCounts: [
+      ["New", 14],
+      ["Contacted", 12],
+      ["Qualified", 10],
+      ["Won", 4],
+      ["Lost", 2],
+    ],
+    valueBase: 95,
+    valueStep: 35,
+    createdDayStart: 2,
+    contactDayStart: 5,
+  }),
+  ...buildLeadBatch({
+    projectId: "northpeak-outdoor-co",
+    names: northpeakLeadNames,
+    emailDomain: "northpeakmail.com",
+    sources: [
+      { source: "Website form", capturedFrom: "Trail gear guide signup" },
+      { source: "Paid ad", capturedFrom: "Google search ad - trail jacket" },
+      { source: "Referral", capturedFrom: "Friend referral checkout opt-in" },
+      { source: "Email signup", capturedFrom: "Camping checklist download" },
+      { source: "Event", capturedFrom: "Retail pop-up QR capture" },
+      { source: "Organic search", capturedFrom: "Outerwear comparison article" },
+    ],
+    assignees: ["Isla Chen", "Liam Smith", "Priya Shah", "Chloe Bennett"],
+    statusCounts: [
+      ["New", 9],
+      ["Contacted", 8],
+      ["Qualified", 6],
+      ["Won", 4],
+      ["Lost", 1],
+    ],
+    valueBase: 140,
+    valueStep: 55,
+    createdDayStart: 4,
+    contactDayStart: 8,
+  }),
+  ...buildLeadBatch({
+    projectId: "vaultline",
+    names: vaultlineLeadNames,
+    companies: vaultlineCompanies,
+    sources: [
+      { source: "Paid ad", capturedFrom: "Enterprise compliance search ad" },
+      { source: "Website form", capturedFrom: "Demo request page" },
+      { source: "Referral", capturedFrom: "Partner referral intro" },
+      { source: "Event", capturedFrom: "Fintech risk summit booth" },
+      { source: "Outbound", capturedFrom: "SDR outbound follow-up" },
+      { source: "Webinar", capturedFrom: "Risk reporting webinar registration" },
+    ],
+    assignees: ["Alex Morgan", "Emma Johnson", "Noah Williams", "Daniel Kim"],
+    statusCounts: [
+      ["New", 4],
+      ["Contacted", 4],
+      ["Qualified", 4],
+      ["Won", 3],
+      ["Lost", 1],
+    ],
+    valueBase: 12000,
+    valueStep: 6500,
+    createdDayStart: 6,
+    contactDayStart: 10,
+  }),
 ];
 
-const leadActivities = leads.flatMap((lead, index) => [
-  {
-    id: `${lead.id}-activity-1`,
-    leadId: lead.id,
-    projectId: lead.projectId,
-    activityType: "Form submission",
-    content: `${lead.name} entered from ${lead.capturedFrom}.`,
-    author: "System",
-    timestamp: `${lead.createdDate}T09:00:00Z`,
-  },
-  {
-    id: `${lead.id}-activity-2`,
-    leadId: lead.id,
-    projectId: lead.projectId,
-    activityType: index % 2 === 0 ? "Email" : "Note",
-    content: index % 2 === 0 ? "Sent first-touch outreach sequence." : "Lead aligned with current campaign priorities.",
-    author: lead.assignedTeamMember,
-    timestamp: `${lead.lastContactedDate}T14:30:00Z`,
-  },
-]);
+function buildLeadActivities(lead, index) {
+  const activities = [
+    {
+      id: `${lead.id}-activity-1`,
+      leadId: lead.id,
+      projectId: lead.projectId,
+      activityType: "Form submission",
+      content: `${lead.name} entered from ${lead.capturedFrom}.`,
+      author: "System",
+      timestamp: `${lead.createdDate}T09:15:00Z`,
+    },
+  ];
+
+  if (lead.status !== "New") {
+    activities.push({
+      id: `${lead.id}-activity-2`,
+      leadId: lead.id,
+      projectId: lead.projectId,
+      activityType: index % 3 === 0 ? "Call" : "Email",
+      content:
+        lead.projectId === "vaultline"
+          ? "Initial qualification completed and next-step criteria were confirmed."
+          : "First-touch follow-up sent and response intent was logged.",
+      author: lead.assignedTeamMember,
+      timestamp: `${lead.lastContactedDate}T14:30:00Z`,
+    });
+  }
+
+  if (["Qualified", "Won", "Lost"].includes(lead.status)) {
+    activities.push({
+      id: `${lead.id}-activity-3`,
+      leadId: lead.id,
+      projectId: lead.projectId,
+      activityType: "Timeline update",
+      content:
+        lead.status === "Qualified"
+          ? "Lead matched the current ICP and moved into priority follow-up."
+          : lead.status === "Won"
+            ? "Opportunity converted after follow-up and offer confirmation."
+            : "Lead was closed after repeated follow-up with no intent signal.",
+      author: lead.assignedTeamMember,
+      timestamp: `${lead.lastContactedDate}T16:45:00Z`,
+    });
+  }
+
+  return activities;
+}
+
+const leadActivities = leads.flatMap(buildLeadActivities);
 
 const campaigns = [
   {
@@ -496,145 +675,189 @@ const tasks = [
   {
     id: "task-lumen-1",
     projectId: "lumen-skincare",
-    title: "Review creator cutdowns",
-    description: "Approve final 15 second social edits for paid launch.",
-    column: "Review",
-    assignee: "Emma Johnson",
+    title: "Triage hydration quiz leads from yesterday",
+    description: "Review the latest Meta lead-form batch and push high-intent contacts into same-day follow-up.",
+    column: "To Do",
+    assignee: "Alex Morgan",
     dueDate: "2026-06-13",
     priority: "High",
-    notes: "Need creative QA before client-facing launch review.",
+    notes: "Current batch came in above target CPL and needs prioritization before 2 PM.",
   },
   {
     id: "task-lumen-2",
     projectId: "lumen-skincare",
-    title: "Refresh landing page FAQ",
-    description: "Clarify launch bundle shipping and returns.",
+    title: "Finalize landing page FAQ revisions",
+    description: "Update shipping, subscription cadence, and bundle-return language for the launch page.",
     column: "In Progress",
     assignee: "Isla Chen",
-    dueDate: "2026-06-15",
+    dueDate: "2026-06-14",
     priority: "Medium",
-    notes: "FAQ also needs shipping screenshot updates.",
+    notes: "Waiting on one final CX note around expedited shipping timing.",
   },
   {
     id: "task-lumen-3",
     projectId: "lumen-skincare",
-    title: "Follow up with new leads",
-    description: "Qualify the latest paid social responses.",
-    column: "To Do",
-    assignee: "Alex Morgan",
-    dueDate: "2026-06-12",
+    title: "Approve creator cutdowns for paid launch",
+    description: "Sign off on the three 15-second cutdowns queued for Monday spend.",
+    column: "Review",
+    assignee: "Emma Johnson",
+    dueDate: "2026-06-14",
     priority: "High",
-    notes: "Prioritize leads from paid social first.",
+    notes: "Needs final brand-safe subtitle pass before export.",
   },
   {
     id: "task-lumen-4",
     projectId: "lumen-skincare",
-    title: "Weekly insights note",
-    description: "Package campaign learnings for Monday review.",
-    column: "Done",
-    assignee: "Alex Morgan",
-    dueDate: "2026-06-09",
-    priority: "Low",
-    notes: "Archived in the weekly recap folder.",
-  },
-  {
-    id: "task-northpeak-1",
-    projectId: "northpeak-outdoor-co",
-    title: "Plan seasonal search copy",
-    description: "Write winter hiking variant headlines.",
-    column: "To Do",
-    assignee: "Liam Smith",
-    dueDate: "2026-06-18",
-    priority: "Medium",
-    notes: "Copy needs seasonal search modifiers.",
-  },
-  {
-    id: "task-northpeak-2",
-    projectId: "northpeak-outdoor-co",
-    title: "Audit email flows",
-    description: "Check abandoned cart timing before July promo.",
+    title: "Refresh retention subject line matrix",
+    description: "Lock the next welcome-flow A/B test using the top open-rate variants from last week.",
     column: "In Progress",
-    assignee: "Isla Chen",
-    dueDate: "2026-06-19",
-    priority: "High",
-    notes: "Check if timing matches abandoned cart triggers.",
-  },
-  {
-    id: "task-vaultline-1",
-    projectId: "vaultline",
-    title: "Draft enterprise case study",
-    description: "Support bottom-funnel demo requests with proof points.",
-    column: "Review",
-    assignee: "Noah Williams",
-    dueDate: "2026-06-17",
-    priority: "High",
-    notes: "Use latest case study stats from Q2.",
-  },
-  {
-    id: "task-vaultline-2",
-    projectId: "vaultline",
-    title: "Refine attribution notes",
-    description: "Split webinar leads from paid search in reporting.",
-    column: "Done",
-    assignee: "Emma Johnson",
-    dueDate: "2026-06-08",
-    priority: "Low",
-    notes: "Reporting notes are ready for stakeholder handoff.",
+    assignee: "Daniel Kim",
+    dueDate: "2026-06-16",
+    priority: "Medium",
+    notes: "Need a final legal check on one claim-driven subject line.",
   },
   {
     id: "task-lumen-5",
     projectId: "lumen-skincare",
-    title: "Prepare testimonial pull quotes",
-    description: "Collect social proof snippets for landing page blocks.",
-    column: "In Progress",
-    assignee: "Isla Chen",
-    dueDate: "2026-06-16",
+    title: "Prepare social proof pull-quote shortlist",
+    description: "Curate customer-review snippets for the launch-page proof block refresh.",
+    column: "Review",
+    assignee: "Priya Shah",
+    dueDate: "2026-06-17",
     priority: "Medium",
-    notes: "Pull from review forms and social comments.",
+    notes: "Need 8 approved quotes and category balance across serum, cleanser, and bundle buyers.",
   },
   {
     id: "task-lumen-6",
     projectId: "lumen-skincare",
-    title: "Approve email subject matrix",
-    description: "Finalize A/B subject lines for the next send.",
-    column: "Review",
+    title: "Publish weekly performance readout",
+    description: "Package channel learnings, CPL shifts, and lead quality notes for the Monday client sync.",
+    column: "Done",
     assignee: "Alex Morgan",
+    dueDate: "2026-06-10",
+    priority: "Low",
+    notes: "Delivered to the client workspace and internal team recap channel.",
+  },
+  {
+    id: "task-northpeak-1",
+    projectId: "northpeak-outdoor-co",
+    title: "Prioritize high-intent trail jacket submissions",
+    description: "Separate sizing and promo-driven inquiries from leads ready for direct follow-up.",
+    column: "To Do",
+    assignee: "Liam Smith",
     dueDate: "2026-06-18",
     priority: "High",
-    notes: "Requires final legal pass before send time.",
+    notes: "Lead-source QA matters here because the retail pop-up submissions skew lower intent.",
+  },
+  {
+    id: "task-northpeak-2",
+    projectId: "northpeak-outdoor-co",
+    title: "Audit abandoned-cart email timing",
+    description: "Check send delays, discount sequencing, and mobile layout before the July promo push.",
+    column: "In Progress",
+    assignee: "Isla Chen",
+    dueDate: "2026-06-19",
+    priority: "High",
+    notes: "Need to align cart timing with current inventory thresholds.",
   },
   {
     id: "task-northpeak-3",
     projectId: "northpeak-outdoor-co",
-    title: "Create spring product bundle brief",
-    description: "Define the bundle structure for bundle testing.",
-    column: "To Do",
-    assignee: "Liam Smith",
-    dueDate: "2026-06-22",
+    title: "Draft peak-season content brief",
+    description: "Outline the July editorial package for trail layering, shell jackets, and camp kitchen bundles.",
+    column: "Review",
+    assignee: "Chloe Bennett",
+    dueDate: "2026-06-20",
     priority: "Medium",
-    notes: "Include price ladder and margins.",
+    notes: "Needs client-facing framing before it goes into the monthly roadmap.",
+  },
+  {
+    id: "task-northpeak-4",
+    projectId: "northpeak-outdoor-co",
+    title: "Refresh paid-search negatives",
+    description: "Tighten search intent by removing broad seasonal traffic from the best-converting ad groups.",
+    column: "In Progress",
+    assignee: "Priya Shah",
+    dueDate: "2026-06-21",
+    priority: "High",
+    notes: "Current CPC drift is coming from generic camping terms.",
+  },
+  {
+    id: "task-northpeak-5",
+    projectId: "northpeak-outdoor-co",
+    title: "QA mobile gear-guide signup flow",
+    description: "Validate form capture, event tracking, and thank-you page attribution on iPhone and Android.",
+    column: "Done",
+    assignee: "Liam Smith",
+    dueDate: "2026-06-11",
+    priority: "Low",
+    notes: "All production fixes were pushed after the checkout CSS cleanup.",
+  },
+  {
+    id: "task-vaultline-1",
+    projectId: "vaultline",
+    title: "Review enterprise case-study draft",
+    description: "Tighten the proof points used in active demo and proposal follow-up.",
+    column: "Review",
+    assignee: "Noah Williams",
+    dueDate: "2026-06-17",
+    priority: "High",
+    notes: "Legal wants one anonymized reference swapped before the final PDF goes out.",
+  },
+  {
+    id: "task-vaultline-2",
+    projectId: "vaultline",
+    title: "Prepare SDR handoff for qualified June leads",
+    description: "Package discovery notes for the newest qualified accounts before next week’s outbound follow-up block.",
+    column: "To Do",
+    assignee: "Alex Morgan",
+    dueDate: "2026-06-18",
+    priority: "High",
+    notes: "Six accounts are ready for sales handoff once budget range is confirmed.",
   },
   {
     id: "task-vaultline-3",
     projectId: "vaultline",
-    title: "Review webinar follow-up sequence",
-    description: "Edit nurture emails for qualified demo attendees.",
-    column: "In Progress",
+    title: "Refine webinar-to-demo attribution notes",
+    description: "Separate webinar-assisted conversions from branded paid-search conversions in the June report.",
+    column: "Done",
     assignee: "Emma Johnson",
-    dueDate: "2026-06-20",
-    priority: "High",
-    notes: "Sequence should branch by company size.",
+    dueDate: "2026-06-09",
+    priority: "Low",
+    notes: "Definitions were approved and rolled into the reporting workspace.",
   },
   {
     id: "task-vaultline-4",
     projectId: "vaultline",
-    title: "Draft Q3 pipeline forecast",
-    description: "Project expected bookings and spend pacing.",
+    title: "Edit webinar follow-up sequence",
+    description: "Update nurture copy for finance ops, compliance leads, and technical evaluators.",
+    column: "In Progress",
+    assignee: "Daniel Kim",
+    dueDate: "2026-06-20",
+    priority: "High",
+    notes: "The branching logic is done; only copy and CTA hierarchy remain.",
+  },
+  {
+    id: "task-vaultline-5",
+    projectId: "vaultline",
+    title: "Finalize Q3 pipeline forecast assumptions",
+    description: "Update scenario ranges based on close rate, ACV, and current SDR capacity.",
     column: "To Do",
     assignee: "Noah Williams",
-    dueDate: "2026-06-25",
+    dueDate: "2026-06-24",
     priority: "High",
-    notes: "Align assumptions with SDR capacity.",
+    notes: "Need a version for board-level review and a version for weekly operations pacing.",
+  },
+  {
+    id: "task-vaultline-6",
+    projectId: "vaultline",
+    title: "QA pricing one-pager before approval reroute",
+    description: "Verify legal edits, retention language, and CTA consistency across the PDF handoff.",
+    column: "Review",
+    assignee: "Emma Johnson",
+    dueDate: "2026-06-21",
+    priority: "Medium",
+    notes: "Once this is clean it can go back into the approvals queue.",
   },
 ];
 
@@ -642,7 +865,7 @@ const calendarEvents = [
   {
     id: "event-lumen-1",
     projectId: "lumen-skincare",
-    title: "Hydration Boost Reel",
+    title: "Hydration Boost Reel publish",
     channel: "Social",
     date: "2026-06-14",
     status: "Scheduled",
@@ -651,29 +874,11 @@ const calendarEvents = [
   {
     id: "event-lumen-2",
     projectId: "lumen-skincare",
-    title: "Launch welcome flow",
+    title: "Launch welcome flow send",
     channel: "Email",
     date: "2026-06-16",
-    status: "Draft",
-    assignee: "Alex Morgan",
-  },
-  {
-    id: "event-northpeak-1",
-    projectId: "northpeak-outdoor-co",
-    title: "Trail jacket blog update",
-    channel: "Search",
-    date: "2026-06-20",
     status: "Scheduled",
-    assignee: "Liam Smith",
-  },
-  {
-    id: "event-vaultline-1",
-    projectId: "vaultline",
-    title: "Compliance webinar invite",
-    channel: "Email",
-    date: "2026-06-24",
-    status: "Draft",
-    assignee: "Noah Williams",
+    assignee: "Daniel Kim",
   },
   {
     id: "event-lumen-3",
@@ -685,13 +890,94 @@ const calendarEvents = [
     assignee: "Isla Chen",
   },
   {
+    id: "event-lumen-4",
+    projectId: "lumen-skincare",
+    title: "Bundle FAQ update",
+    channel: "Search",
+    date: "2026-06-19",
+    status: "Draft",
+    assignee: "Isla Chen",
+  },
+  {
+    id: "event-lumen-5",
+    projectId: "lumen-skincare",
+    title: "Creator cutdown export",
+    channel: "Social",
+    date: "2026-06-19",
+    status: "Scheduled",
+    assignee: "Emma Johnson",
+  },
+  {
+    id: "event-lumen-6",
+    projectId: "lumen-skincare",
+    title: "Retention test launch",
+    channel: "Email",
+    date: "2026-06-19",
+    status: "Draft",
+    assignee: "Daniel Kim",
+  },
+  {
+    id: "event-northpeak-1",
+    projectId: "northpeak-outdoor-co",
+    title: "Trail jacket blog update",
+    channel: "Search",
+    date: "2026-06-20",
+    status: "Scheduled",
+    assignee: "Chloe Bennett",
+  },
+  {
     id: "event-northpeak-2",
     projectId: "northpeak-outdoor-co",
-    title: "Peak season gear round-up",
-    channel: "Search",
+    title: "Peak season gear round-up email",
+    channel: "Email",
     date: "2026-06-23",
     status: "Draft",
+    assignee: "Isla Chen",
+  },
+  {
+    id: "event-northpeak-3",
+    projectId: "northpeak-outdoor-co",
+    title: "Search copy refresh",
+    channel: "Search",
+    date: "2026-06-23",
+    status: "Scheduled",
     assignee: "Liam Smith",
+  },
+  {
+    id: "event-northpeak-4",
+    projectId: "northpeak-outdoor-co",
+    title: "Retail pop-up recap post",
+    channel: "Social",
+    date: "2026-06-26",
+    status: "Draft",
+    assignee: "Priya Shah",
+  },
+  {
+    id: "event-vaultline-1",
+    projectId: "vaultline",
+    title: "Compliance webinar invite",
+    channel: "Email",
+    date: "2026-06-24",
+    status: "Draft",
+    assignee: "Daniel Kim",
+  },
+  {
+    id: "event-vaultline-2",
+    projectId: "vaultline",
+    title: "Analyst quote one-pager",
+    channel: "Email",
+    date: "2026-06-24",
+    status: "Scheduled",
+    assignee: "Emma Johnson",
+  },
+  {
+    id: "event-vaultline-3",
+    projectId: "vaultline",
+    title: "SDR follow-up sequence push",
+    channel: "Email",
+    date: "2026-06-27",
+    status: "Scheduled",
+    assignee: "Alex Morgan",
   },
 ];
 

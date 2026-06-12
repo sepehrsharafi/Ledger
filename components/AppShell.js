@@ -26,7 +26,6 @@ const projectNav = [
 
 const manageNav = [
   { href: "/projects", label: "Projects", icon: "projects" },
-  { href: "/settings", label: "Integrations", icon: "integrations" },
   { href: "/settings", label: "Settings", icon: "settings", adminOnly: true },
 ];
 
@@ -112,7 +111,6 @@ export default function AppShell({
       ? new URLSearchParams(window.location.search)
       : new URLSearchParams();
   const queryProjectId = currentSearchParams.get("project");
-  const settingsSection = currentSearchParams.get("section") || "settings";
   const currentProject = isProjectsHub
     ? null
     : project ||
@@ -180,18 +178,12 @@ export default function AppShell({
     .filter((item) => !(viewerRole === "Member" && item.adminOnly))
     .map((item) => {
       const href =
-        item.label === "Integrations"
-          ? `/settings?section=integrations${currentProject ? `&project=${currentProject.id}` : ""}`
-          : item.label === "Settings"
-            ? `/settings?section=settings${currentProject ? `&project=${currentProject.id}` : ""}`
-            : `${item.href}${item.href === "/settings" ? "" : projectQuerySuffix}`;
+        item.label === "Settings"
+          ? `/settings${currentProject ? `?project=${currentProject.id}` : ""}`
+          : `${item.href}${item.href === "/settings" ? "" : projectQuerySuffix}`;
 
       const active =
-        item.label === "Integrations"
-          ? pathname === "/settings" && settingsSection === "integrations"
-          : item.label === "Settings"
-            ? pathname === "/settings" && settingsSection !== "integrations"
-            : pathname === item.href;
+        item.label === "Settings" ? pathname === "/settings" : pathname === item.href;
 
       return { ...item, href, active };
     });

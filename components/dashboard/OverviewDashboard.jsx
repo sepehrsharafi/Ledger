@@ -16,10 +16,10 @@ import {
 import {
   formatCurrency,
   formatDate,
+  formatDecimal,
   formatNumber,
   monthLabel,
 } from "@/lib/utils";
-import { CalendarIcon } from "@/components/dashboard/DashboardIcons";
 import Link from "next/link";
 
 const chartPalette = {
@@ -241,6 +241,69 @@ function getReportingWindow(series = []) {
   };
 }
 
+function PerformanceTooltip({ active, label, payload }) {
+  if (!active || !payload?.length) {
+    return null;
+  }
+
+  const metricRows = [
+    {
+      key: "conversionRate",
+      label: "Conversion rate",
+      color: chartPalette.conversionRate,
+      suffix: "%",
+    },
+    {
+      key: "costPerLeadRate",
+      label: "Cost per lead",
+      color: chartPalette.costPerLead,
+      prefix: "$",
+    },
+    {
+      key: "leadEfficiency",
+      label: "Leads per $1k spend",
+      color: chartPalette.leadRate,
+    },
+  ];
+
+  const valueMap = Object.fromEntries(
+    payload.map((item) => [item.dataKey, item.value]),
+  );
+
+  return (
+    <div className="min-w-[220px] rounded-[18px] border border-[#D9E4F6] bg-white p-4 shadow-[0_18px_40px_rgba(15,23,42,0.08)]">
+      <div className="text-[18px] font-semibold text-ledger-ink">{label}</div>
+      <div className="mt-3 space-y-2.5">
+        {metricRows.map((metric) => {
+          const value = valueMap[metric.key];
+          return (
+            <div
+              key={metric.key}
+              className="flex items-center justify-between gap-4 rounded-[12px] bg-[#F8FAFD] px-3 py-2 text-[13px]"
+            >
+              <div className="flex items-center gap-2 text-[#5E6E90]">
+                <span
+                  className="h-2.5 w-2.5 rounded-full"
+                  style={{ backgroundColor: metric.color }}
+                />
+                <span>{metric.label}</span>
+              </div>
+              <span className="font-semibold text-ledger-ink">
+                {metric.prefix || ""}
+                {formatDecimal(value, {
+                  minimumFractionDigits: metric.key === "costPerLeadRate" ? 2 : 1,
+                  maximumFractionDigits: metric.key === "costPerLeadRate" ? 2 : 1,
+                })}
+                {metric.suffix || ""}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export default function OverviewDashboard({ bundle, recentActivity, store }) {
   const totalLeads = bundle.leadCount ?? bundle.leads.length;
   const previousLeadCount =
@@ -256,8 +319,8 @@ export default function OverviewDashboard({ bundle, recentActivity, store }) {
   const performanceSeries = bundle.series.map((item) => ({
     ...item,
     label: monthLabel(item.month),
-    leadRate: item.spend ? (item.leads / item.spend) * 1000 : 0,
-    conversionRate: item.leads ? (item.conversions / item.leads) * 100 : 0,
+    leadEfficiency: item.spend ? (item.leads / item.spend) * 1000 : 0,
+    conversionRate: item.traffic ? (item.conversions / item.traffic) * 100 : 0,
     costPerLeadRate: item.leads ? item.spend / Math.max(1, item.leads) : 0,
   }));
   const funnelStages = [
@@ -296,7 +359,6 @@ export default function OverviewDashboard({ bundle, recentActivity, store }) {
             Reporting period
           </div>
           <div className="mt-1 flex items-center gap-2 text-[16px] font-semibold text-ledger-ink">
-            <CalendarIcon className="h-4.5 w-4.5 text-slate-500" />
             <span>{reportingWindow.rangeLabel}</span>
           </div>
         </div>
@@ -395,7 +457,7 @@ export default function OverviewDashboard({ bundle, recentActivity, store }) {
               <div className="hidden items-center gap-4 text-[13px] text-slate-500 md:flex">
                 <span className="flex items-center gap-2">
                   <span className="h-2.5 w-2.5 rounded-full bg-[#2B58E8]" />
-                  Lead rate
+                  Leads per $1k spend
                 </span>
                 <span className="flex items-center gap-2">
                   <span className="h-2.5 w-2.5 rounded-full bg-[#20B4C7]" />
@@ -438,10 +500,10 @@ export default function OverviewDashboard({ bundle, recentActivity, store }) {
                   stroke="#94A3B8"
                   fontSize={12}
                 />
-                <Tooltip />
+                <Tooltip content={<PerformanceTooltip />} />
                 <Area
                   type="monotone"
-                  dataKey="leadRate"
+                  dataKey="leadEfficiency"
                   stroke={chartPalette.leadRate}
                   fill="url(#overviewArea)"
                   strokeWidth={2.5}
@@ -644,8 +706,8 @@ export default function OverviewDashboard({ bundle, recentActivity, store }) {
             </Link>
           }
         >
-          <div className="space-y-3">
-            {(bundle.upcomingTasks || bundle.tasks).map((task, index) => {
+          <div className="ledger-scrollbar max-h-[440px] space-y-3 overflow-y-auto pr-1">
+            {(bundle.upcomingTasks || bundle.tasks).map((task) => {
                 const done = task.column === "Done";
                 return (
                   <div
@@ -655,7 +717,7 @@ export default function OverviewDashboard({ bundle, recentActivity, store }) {
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex items-start gap-3">
                         <span
-                          className={`mt-0.5 flex h-5 w-5 items-center justify-center rounded-full border ${
+                          className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 ${
                             done
                               ? "border-ledger-blue bg-ledger-blue text-white"
                               : "border-[#D7E2F4] bg-white"
@@ -691,18 +753,11 @@ export default function OverviewDashboard({ bundle, recentActivity, store }) {
                           </div>
                         </div>
                       </div>
-                      <div className="flex items-center gap-1.5 text-[13px] text-slate-500">
-                        <CalendarIcon className="h-4 w-4" />
-                        <span>
-                          {index === 0
-                            ? "Today"
-                            : index === 1
-                              ? "Tomorrow"
-                              : formatDate(task.dueDate, {
-                                  month: "short",
-                                  day: "numeric",
-                                })}
-                        </span>
+                      <div className="text-[13px] font-medium uppercase tracking-[0.08em] text-slate-500">
+                        {formatDate(task.dueDate, {
+                          month: "short",
+                          day: "numeric",
+                        })}
                       </div>
                     </div>
                   </div>

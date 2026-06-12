@@ -5,6 +5,7 @@ import { useState } from "react";
 import AppShell from "@/components/AppShell";
 import Badge from "@/components/Badge";
 import ProjectFormModal from "@/components/ProjectFormModal";
+import { SkeletonBlock } from "@/components/Skeleton";
 import { useProjectsHubData } from "@/lib/useLedgerData";
 
 function StatBlock({ label, value, accent = false }) {
@@ -26,7 +27,7 @@ function StatBlock({ label, value, accent = false }) {
 
 export default function ProjectsHubPage() {
   const router = useRouter();
-  const { addProject, projectCards } = useProjectsHubData();
+  const { addProject, projectCards, isLoading } = useProjectsHubData();
   const [modalOpen, setModalOpen] = useState(false);
 
   async function handleCreateProject(form) {
@@ -53,7 +54,34 @@ export default function ProjectsHubPage() {
       </div>
 
       <div className="grid gap-5 lg:grid-cols-2 2xl:grid-cols-3">
-        {projectCards.map((project) => (
+        {isLoading
+          ? Array.from({ length: 6 }).map((_, index) => (
+              <div
+                key={index}
+                className="overflow-hidden rounded-[24px] border border-[#E4EBF7] bg-white p-6 shadow-[0_12px_32px_rgba(15,23,42,0.04)]"
+              >
+                <SkeletonBlock className="h-[10px] w-full rounded-full" />
+                <div className="mt-6 flex items-start justify-between gap-4">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-3">
+                      <SkeletonBlock className="h-11 w-11 rounded-[14px]" />
+                      <div className="min-w-0 flex-1">
+                        <SkeletonBlock className="h-8 w-40" />
+                        <SkeletonBlock className="mt-2 h-4 w-28" />
+                      </div>
+                    </div>
+                    <SkeletonBlock className="mt-5 h-5 w-48" />
+                  </div>
+                  <SkeletonBlock className="h-7 w-20 rounded-full" />
+                </div>
+                <div className="mt-6 grid grid-cols-2 gap-4">
+                  <SkeletonBlock className="h-24 w-full rounded-[18px]" />
+                  <SkeletonBlock className="h-24 w-full rounded-[18px]" />
+                </div>
+                <SkeletonBlock className="mt-5 h-14 w-full rounded-[18px]" />
+              </div>
+            ))
+          : projectCards.map((project) => (
           <button
             key={project.id}
             onClick={() => router.push(`/projects/${project.id}`)}
@@ -129,7 +157,7 @@ export default function ProjectsHubPage() {
               </div>
             </div>
           </button>
-        ))}
+            ))}
       </div>
 
       <ProjectFormModal

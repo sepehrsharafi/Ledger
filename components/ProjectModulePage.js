@@ -36,8 +36,10 @@ import {
   cn,
   formatCurrency,
   formatDate,
+  formatDecimal,
   formatNumber,
   monthLabel,
+  toLocalDateKey,
 } from "@/lib/utils";
 import { useDemoLoading } from "@/lib/useDemoLoading";
 
@@ -105,9 +107,7 @@ const subtlePanelClassName =
   "rounded-[18px] border border-[#E4EBF7] bg-white shadow-[0_10px_24px_rgba(15,23,42,0.03)]";
 
 function inputDateValue(value = "") {
-  return value
-    ? String(value).slice(0, 10)
-    : new Date().toISOString().slice(0, 10);
+  return value ? toLocalDateKey(value) : toLocalDateKey(new Date());
 }
 
 function isOverdueDate(date, completed = false) {
@@ -175,6 +175,56 @@ function KpiCard({
           </LineChart>
         </ResponsiveContainer>
       </div>
+      <Modal
+        open={Boolean(pendingUnassign)}
+        onClose={() => setPendingUnassign(null)}
+        title="Unassign Team Member?"
+        footer={
+          <>
+            <button
+              onClick={() => setPendingUnassign(null)}
+              className="ledger-button-secondary rounded-[14px] px-4 py-2 text-sm text-slate-600"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() =>
+                handleAssignmentToggle(pendingUnassign.member.id, {
+                  force: true,
+                })
+              }
+              className="rounded-[14px] bg-rose-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-rose-700"
+            >
+              Unassign Anyway
+            </button>
+          </>
+        }
+      >
+        {pendingUnassign ? (
+          <div className="space-y-4">
+            <p className="text-[15px] leading-7 text-[#5E6E90]">
+              {pendingUnassign.member.name} still has {pendingUnassign.taskCount} task
+              {pendingUnassign.taskCount === 1 ? "" : "s"} assigned in this
+              project. Confirm before removing them from the team.
+            </p>
+            <div className="rounded-[18px] bg-[#F8FAFD] p-4">
+              <div className="text-[12px] font-semibold uppercase tracking-[0.18em] text-[#8FA0BE]">
+                Assigned Tasks
+              </div>
+              <div className="mt-3 space-y-2">
+                {pendingUnassign.assignedTasks.slice(0, 4).map((task) => (
+                  <div
+                    key={task.id}
+                    className="rounded-[14px] border border-[#E4EBF7] bg-white px-3 py-3 text-sm text-ledger-ink"
+                  >
+                    {task.title}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        ) : null}
+      </Modal>
     </div>
   );
 }
@@ -536,29 +586,32 @@ function LeadsScreen({
                           }}
                           onDragEnd={() => setDraggedLeadId(null)}
                           className={cn(
-                            "rounded-[18px] border border-[#E3EAF7] bg-[#FAFCFF] p-4 transition",
+                            "cursor-pointer rounded-[18px] border border-[#E3EAF7] bg-[#FAFCFF] p-4 transition",
                             draggedLeadId === lead.id
                               ? "opacity-60 shadow-[0_12px_24px_rgba(15,23,42,0.08)]"
                               : "hover:border-[#C9D8F2] hover:shadow-[0_12px_24px_rgba(15,23,42,0.05)]",
                             columnIndex % 2 === 0 ? "bg-[#FBFDFF]" : "",
                           )}
+                          onClick={() => openLead(lead)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              openLead(lead);
+                            }
+                          }}
+                          role="button"
+                          tabIndex={0}
                         >
-                          <button
-                            onClick={() => openLead(lead)}
-                            className="w-full text-left"
-                          >
-                            <div className="flex items-start justify-between gap-3">
-                              <div>
-                                <div className="font-semibold text-ledger-ink">
-                                  {lead.name}
-                                </div>
-                                <div className="mt-1 text-sm text-slate-500">
-                                  {lead.company}
-                                </div>
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <div className="font-semibold text-ledger-ink">
+                                {lead.name}
                               </div>
-                              <Badge tone={lead.status}>{lead.status}</Badge>
+                              <div className="mt-1 text-sm text-slate-500">
+                                {lead.company}
+                              </div>
                             </div>
-                          </button>
+                          </div>
                           <div className="mt-4 flex items-center justify-between text-xs text-slate-500">
                             <div className="flex items-center gap-2">
                               <span
@@ -653,7 +706,9 @@ function LeadsScreen({
                   >
                     <div className="flex items-center justify-between">
                       <div className="font-semibold text-ledger-ink">
-                        {activity.activityType}
+                        {activity.activityType === "Note"
+                          ? "Timeline entry"
+                          : activity.activityType}
                       </div>
                       <div className="text-xs text-slate-400">
                         {formatDate(activity.timestamp, {
@@ -674,23 +729,23 @@ function LeadsScreen({
             </div>
             <div>
               <div className="text-sm font-bold uppercase tracking-[0.12em] text-[#8FA0BE]">
-                Add Note
+                Add Timeline Entry
               </div>
               <textarea
                 value={note}
                 onChange={(event) => setNote(event.target.value)}
                 rows={4}
                 className="ledger-textarea mt-4"
-                placeholder="Capture a new client-facing note..."
+                placeholder="Capture a new timeline update..."
               />
-                  <button
+              <button
                 onClick={async () => {
                   await onNote(selectedLead.id, note);
                   setNote("");
                 }}
                 className="ledger-button ledger-button-primary mt-4 min-w-[140px]"
               >
-                Save Note
+                Save Entry
               </button>
             </div>
             <div className="flex justify-end border-t border-[#E6EDF8] pt-4">
@@ -1359,6 +1414,7 @@ function CalendarScreen({
     assignee: store.teamMembers[0]?.name || "Alex Morgan",
   });
   const eventDraftIsValid = eventDraft.title.trim() && eventDraft.date;
+  const dayPreviewLimit = 2;
 
   if (!bundle.events.length) {
     return (
@@ -1432,7 +1488,7 @@ function CalendarScreen({
         </div>
         <div className="mt-4 grid grid-cols-7 gap-3">
           {days.map((day, index) => {
-            const dateKey = day ? day.toISOString().slice(0, 10) : null;
+            const dateKey = day ? toLocalDateKey(day) : null;
             const dayEvents = bundle.events.filter(
               (event) => event.date === dateKey,
             );
@@ -1440,7 +1496,7 @@ function CalendarScreen({
             return (
               <div
                 key={index}
-                className="min-h-[140px] rounded-[18px] border border-ledger-border bg-slate-50 p-3"
+                className="flex min-h-[140px] flex-col rounded-[18px] border border-ledger-border bg-slate-50 p-3"
               >
                 {day ? (
                   <>
@@ -1448,37 +1504,26 @@ function CalendarScreen({
                       <div className="text-sm font-medium text-ledger-ink">
                         {day.getDate()}
                       </div>
-                      {hasMultiple ? (
-                        <button
-                          onClick={() =>
-                            setSelectedDay({
-                              dateLabel: formatDate(day, {
-                                month: "long",
-                                day: "numeric",
-                              }),
-                              events: dayEvents,
-                            })
-                          }
-                          className="rounded-full bg-ledger-blue px-2.5 py-1 text-[11px] font-bold text-white"
-                        >
-                          {dayEvents.length} items
-                        </button>
-                      ) : null}
                     </div>
-                    <div className="mt-3 space-y-2">
+                    <div className="mt-3 flex min-h-0 flex-1 flex-col gap-2">
                       {!hasMultiple
-                        ? dayEvents.map((event) => (
-                            <button
-                              key={event.id}
-                              onClick={() => setSelectedEvent({ ...event })}
-                              className="w-full rounded-[12px] px-3 py-2 text-left text-xs font-semibold text-white"
-                              style={{
-                                backgroundColor:
-                                  channelColors[event.channel] || "#2B58E8",
-                              }}
-                            >
-                              {event.title}
-                            </button>
+                        ? dayEvents
+                            .slice(0, dayPreviewLimit)
+                            .map((event) => (
+                          <button
+                            key={event.id}
+                            onClick={() => setSelectedEvent({ ...event })}
+                            className="w-full rounded-[14px] px-3 py-2 text-left text-xs font-semibold text-white"
+                            style={{
+                              backgroundColor:
+                                channelColors[event.channel] || "#2B58E8",
+                            }}
+                          >
+                            <div>{event.title}</div>
+                            <div className="mt-1 text-[11px] font-medium text-white/80">
+                              {event.channel}
+                            </div>
+                          </button>
                           ))
                         : null}
                       {hasMultiple ? (
@@ -1492,9 +1537,9 @@ function CalendarScreen({
                               events: dayEvents,
                             })
                           }
-                          className="w-full rounded-[12px] border border-dashed border-[#C7D7F3] bg-white px-3 py-2 text-left text-xs font-semibold text-ledger-ink"
+                          className="mt-auto w-full rounded-[14px] border border-dashed border-[#BFD2FA] bg-white px-3 py-3 text-left text-sm font-semibold text-ledger-blue"
                         >
-                          View all {dayEvents.length} items
+                          {dayEvents.length} items · View
                         </button>
                       ) : null}
                     </div>
@@ -1925,24 +1970,30 @@ function TasksScreen({
                       }}
                       onDragEnd={() => setDraggedTaskId(null)}
                       className={cn(
-                        "rounded-[16px] border border-ledger-border bg-slate-50 p-4 transition",
+                        "cursor-pointer rounded-[16px] border border-ledger-border bg-slate-50 p-4 transition",
                         draggedTaskId === task.id
                           ? "opacity-60 shadow-[0_12px_24px_rgba(15,23,42,0.08)]"
                           : "hover:border-[#C9D8F2]",
                       )}
+                      onClick={() => setSelectedTask({ ...task })}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          setSelectedTask({ ...task });
+                        }
+                      }}
+                      role="button"
+                      tabIndex={0}
                     >
                       <div className="flex items-start justify-between gap-3">
-                        <button
-                          onClick={() => setSelectedTask({ ...task })}
-                          className="flex-1 text-left"
-                        >
+                        <div className="flex-1 text-left">
                           <div className="font-semibold text-ledger-ink">
                             {task.title}
                           </div>
                           <div className="mt-2 text-sm leading-6 text-slate-500">
                             {task.description}
                           </div>
-                        </button>
+                        </div>
                         <Badge tone={task.priority}>{task.priority}</Badge>
                       </div>
                       <div className="mt-4 text-xs uppercase tracking-[0.18em] text-slate-400">
@@ -3224,6 +3275,16 @@ function ProjectTeamScreen({ bundle, store, onToggleAssignment }) {
   const unassignedMembers = store.teamMembers.filter(
     (member) => !member.assignedProjectIds.includes(bundle.project.id),
   );
+  const [pendingUnassign, setPendingUnassign] = useState(null);
+
+  async function handleAssignmentToggle(memberId, options = {}) {
+    const result = await onToggleAssignment(memberId, options);
+    if (result?.status === "requires-confirmation") {
+      setPendingUnassign(result);
+    } else if (result?.status === "updated") {
+      setPendingUnassign(null);
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -3256,10 +3317,7 @@ function ProjectTeamScreen({ bundle, store, onToggleAssignment }) {
                 key={member.id}
                 className="flex items-center justify-between rounded-[18px] border border-ledger-border px-4 py-3"
               >
-                <button
-                  onClick={() => onToggleAssignment(member.id)}
-                  className="flex items-center gap-3 text-left"
-                >
+                <div className="flex items-center gap-3 text-left">
                   <div
                     className="flex h-11 w-11 items-center justify-center rounded-full text-sm font-semibold text-white"
                     style={{ backgroundColor: member.avatarColor }}
@@ -3278,9 +3336,9 @@ function ProjectTeamScreen({ bundle, store, onToggleAssignment }) {
                       {member.role} · {member.email}
                     </div>
                   </div>
-                </button>
+                </div>
                 <button
-                  onClick={() => onToggleAssignment(member.id)}
+                  onClick={() => handleAssignmentToggle(member.id)}
                   className="rounded-full border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-100"
                 >
                   Unassign
@@ -3322,7 +3380,7 @@ function ProjectTeamScreen({ bundle, store, onToggleAssignment }) {
                   </div>
                 </div>
                 <button
-                  onClick={() => onToggleAssignment(member.id)}
+                  onClick={() => handleAssignmentToggle(member.id)}
                   className="rounded-full border border-ledger-blue/20 bg-[#EEF4FF] px-3 py-2 text-sm font-semibold text-ledger-blue transition hover:bg-[#DDE8FF]"
                 >
                   Assign
