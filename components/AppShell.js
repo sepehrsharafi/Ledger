@@ -4,7 +4,9 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Logo from "@/components/Logo";
+import { SkeletonBlock } from "@/components/Skeleton";
 import { useAppContext } from "@/context/AppContext";
+import { useRouteTransition } from "@/context/RouteTransition";
 import { useShellData } from "@/lib/useLedgerData";
 import { cn } from "@/lib/utils";
 import {
@@ -38,10 +40,15 @@ function initials(name) {
 }
 
 function NavItem({ href, label, icon, active, onNavigate }) {
+  const { startNavigation } = useRouteTransition();
+
   return (
     <Link
       href={href}
-      onClick={onNavigate}
+      onClick={() => {
+        startNavigation(href);
+        onNavigate?.();
+      }}
       className={cn(
         "group flex items-center gap-3 rounded-lg px-3.5 py-3 text-[15px] font-semibold transition duration-200",
         active
@@ -92,11 +99,15 @@ export default function AppShell({
   actions,
   children,
   project,
+  projectId,
   projectSection,
   hidePageHeading = false,
 }) {
-  const pathname = usePathname();
+  const committedPathname = usePathname();
   const router = useRouter();
+  const { pendingPath, startNavigation } = useRouteTransition();
+  // Highlight the destination as soon as it is clicked, not once it commits.
+  const pathname = pendingPath || committedPathname;
   const { isAuthenticated, isStoreHydrated, logout, viewerRole } = useAppContext();
   const { projects, teamMembers, unreadCount } = useShellData();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -111,10 +122,13 @@ export default function AppShell({
       ? new URLSearchParams(window.location.search)
       : new URLSearchParams();
   const queryProjectId = currentSearchParams.get("project");
+  const activeProjectId = projectId || queryProjectId;
   const currentProject = isProjectsHub
     ? null
     : project ||
-      projects.find((item) => item.id === queryProjectId) ||
+      projects.find((item) => item.id === activeProjectId) ||
+      // Keep the sidebar in project mode while the shell payload is in flight.
+      (projectId ? { id: projectId, name: "" } : null) ||
       null;
   const userProfile =
     teamMembers.find((member) => member.name === "Alex Morgan") ||
@@ -192,6 +206,13 @@ export default function AppShell({
     (item) => item.id !== currentProject?.id,
   );
 
+  // Buttons navigate imperatively, so they never get Link prefetching — the
+  // pending state is what keeps them feeling immediate.
+  function goTo(href) {
+    startNavigation(href);
+    router.push(href);
+  }
+
   return (
     <div className="min-h-screen bg-[#FBFDFF] text-ledger-ink">
       <div className="flex min-h-screen">
@@ -226,17 +247,21 @@ export default function AppShell({
                   if (currentProject) {
                     setProjectMenuOpen((current) => !current);
                   } else {
-                    router.push("/projects");
+                    goTo("/projects");
                   }
                 }}
               >
                 <div className="flex h-9 w-9 items-center justify-center rounded-[12px] bg-ledger-blue text-sm font-bold text-white">
-                  {currentProject ? initials(currentProject.name) : "PR"}
+                  {currentProject?.name ? initials(currentProject.name) : "PR"}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-[14px] font-semibold text-ledger-ink">
-                    {currentProject?.name || "Project Workspace"}
-                  </div>
+                  {currentProject && !currentProject.name ? (
+                    <SkeletonBlock className="h-4 w-32 rounded-md" />
+                  ) : (
+                    <div className="truncate text-[14px] font-semibold text-ledger-ink">
+                      {currentProject?.name || "Project Workspace"}
+                    </div>
+                  )}
                   {!currentProject ? (
                     <div className="mt-0.5 text-[12px] text-[#8FA0BE]">
                       Choose a project to continue
@@ -255,7 +280,7 @@ export default function AppShell({
                 <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-20 rounded-[16px] border border-[#E3EBF7] bg-white p-2 shadow-[0_18px_40px_rgba(15,23,42,0.08)]">
                   <button
                     onClick={() => {
-                      router.push("/projects");
+                      goTo("/projects");
                       setProjectMenuOpen(false);
                       setMobileNavOpen(false);
                     }}
@@ -267,7 +292,7 @@ export default function AppShell({
                     <button
                       key={item.id}
                       onClick={() => {
-                        router.push(`/projects/${item.id}`);
+                        goTo(`/projects/${item.id}`);
                         setProjectMenuOpen(false);
                         setMobileNavOpen(false);
                       }}
@@ -326,9 +351,11 @@ export default function AppShell({
               <div className="ml-auto flex items-center gap-3">
                 <button className="relative flex h-10 w-10 items-center justify-center rounded-full text-[#60708F] transition hover:bg-[#F4F7FF] hover:text-ledger-blue">
                   <BellIcon className="h-5 w-5" />
-                  <span className="absolute right-0 top-0 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-ledger-blue px-1 text-[11px] font-bold text-white">
-                    {unreadCount}
-                  </span>
+                  {unreadCount ? (
+                    <span className="absolute right-0 top-0 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-ledger-blue px-1 text-[11px] font-bold text-white">
+                      {unreadCount}
+                    </span>
+                  ) : null}
                 </button>
 
                 <div ref={userMenuRef} className="relative">

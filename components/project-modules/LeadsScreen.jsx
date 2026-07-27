@@ -4,6 +4,7 @@ import { useState } from "react";
 import Badge from "@/components/Badge";
 import Drawer from "@/components/Drawer";
 import EmptyState from "@/components/EmptyState";
+import { SkeletonBlock } from "@/components/Skeleton";
 import { cn, formatCurrency, formatDate } from "@/lib/utils";
 import {
   allowedLeadStatuses,
@@ -24,6 +25,7 @@ export default function LeadsScreen({
   onCloseLead,
   selectedLead,
   isLeadDetailLoading,
+  isListLoading = false,
   teamMembers,
   query,
   setQuery,
@@ -51,7 +53,7 @@ export default function LeadsScreen({
     assignedTeamMember: "Alex Morgan",
   });
 
-  if (!summary.total && !leads.length) {
+  if (!isListLoading && !summary.total && !leads.length) {
     return (
       <EmptyState
         title="No leads yet. Add your first lead or connect a source."
@@ -224,8 +226,22 @@ export default function LeadsScreen({
           </div>
         </div>
 
-        {view === "table" ? (
-          <div className={cn(panelClassName, "overflow-hidden")}>
+        {isListLoading && !leads.length ? (
+          <div className={cn(panelClassName, "p-5")}>
+            <div className="space-y-3">
+              {Array.from({ length: 5 }).map((_, index) => (
+                <SkeletonBlock key={index} className="h-14 w-full" />
+              ))}
+            </div>
+          </div>
+        ) : view === "table" ? (
+          <div
+            className={cn(
+              panelClassName,
+              "overflow-hidden transition-opacity",
+              isListLoading ? "opacity-60" : "",
+            )}
+          >
             <div className="md:hidden">
               <div className="space-y-3 p-4">
                 {leads.map((lead) => (
@@ -317,7 +333,12 @@ export default function LeadsScreen({
             </div>
           </div>
         ) : (
-          <div className="grid gap-4 xl:grid-cols-5">
+          <div
+            className={cn(
+              "grid gap-4 transition-opacity xl:grid-cols-5",
+              isListLoading ? "opacity-60" : "",
+            )}
+          >
             {allowedLeadStatuses.map((status, columnIndex) => {
               const items = leads.filter((lead) => lead.status === status);
               const columnValue = items.reduce(

@@ -2,10 +2,10 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import AppShell from "@/components/AppShell";
 import Badge from "@/components/Badge";
 import ProjectFormModal from "@/components/ProjectFormModal";
 import { SkeletonBlock } from "@/components/Skeleton";
+import { useRouteTransition } from "@/context/RouteTransition";
 import { useProjectsHubData } from "@/lib/useLedgerData";
 
 function StatBlock({ label, value, accent = false }) {
@@ -27,19 +27,23 @@ function StatBlock({ label, value, accent = false }) {
 
 export default function ProjectsHubPage() {
   const router = useRouter();
+  const { startNavigation } = useRouteTransition();
   const { addProject, projectCards, isLoading } = useProjectsHubData();
   const [modalOpen, setModalOpen] = useState(false);
 
+  function openProject(projectId) {
+    const href = `/projects/${projectId}`;
+    startNavigation(href);
+    router.push(href);
+  }
+
   async function handleCreateProject(form) {
     const newProjectId = await addProject(form);
-    router.push(`/projects/${newProjectId}`);
+    openProject(newProjectId);
   }
 
   return (
-    <AppShell
-      title="Projects"
-      subtitle="Every client workspace, organized in one place."
-    >
+    <>
       <div className="mb-6 flex items-center justify-between gap-4">
         <div className="text-[14px] text-[#8A98B3]">
           Select a workspace to open its dashboard, pipeline, and delivery
@@ -84,7 +88,7 @@ export default function ProjectsHubPage() {
           : projectCards.map((project) => (
           <button
             key={project.id}
-            onClick={() => router.push(`/projects/${project.id}`)}
+            onClick={() => openProject(project.id)}
             className="group overflow-hidden rounded-[24px] border border-[#E4EBF7] bg-white text-left shadow-[0_12px_32px_rgba(15,23,42,0.04)] transition duration-200 hover:-translate-y-1 hover:shadow-[0_24px_54px_rgba(15,23,42,0.08)]"
           >
             <div
@@ -165,6 +169,6 @@ export default function ProjectsHubPage() {
         onClose={() => setModalOpen(false)}
         onSubmit={handleCreateProject}
       />
-    </AppShell>
+    </>
   );
 }

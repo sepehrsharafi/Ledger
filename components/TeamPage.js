@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import AppShell from "@/components/AppShell";
 import Badge from "@/components/Badge";
 import Drawer from "@/components/Drawer";
 import Modal from "@/components/Modal";
@@ -46,7 +45,7 @@ export default function TeamPage() {
   }
 
   return (
-    <AppShell title="Team" subtitle="Agency capacity, ownership, and workload in one place.">
+    <>
       <div className="space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-4 rounded-[24px] border border-[#E4EBF7] bg-white p-5">
           <div>
@@ -281,6 +280,6 @@ export default function TeamPage() {
           </div>
         ) : null}
       </Modal>
-    </AppShell>
+    </>
   );
 }
