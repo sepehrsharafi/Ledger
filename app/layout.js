@@ -1,10 +1,18 @@
 import "./globals.css";
-import { Inter } from "next/font/google";
+import { Archivo, IBM_Plex_Mono } from "next/font/google";
 import { AppProvider } from "@/context/AppContext";
 
-const inter = Inter({
+const display = Archivo({
   subsets: ["latin"],
-  variable: "--font-ledger",
+  variable: "--font-display",
+  display: "swap",
+});
+
+// Carries every uppercase label and every figure that has to line up in a column.
+const monoLabel = IBM_Plex_Mono({
+  subsets: ["latin"],
+  weight: ["400", "500", "600"],
+  variable: "--font-mono-label",
   display: "swap",
 });
 
@@ -15,8 +23,10 @@ export const metadata = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en">
-      <body className={inter.variable}>
+    // The font variables go on <html> so the :root aliases in globals.css can
+    // resolve them.
+    <html lang="en" className={`${display.variable} ${monoLabel.variable}`}>
+      <body>
         <AppProvider>{children}</AppProvider>
       </body>
     </html>

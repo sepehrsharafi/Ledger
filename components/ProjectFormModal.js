@@ -2,25 +2,48 @@
 
 import { useState } from "react";
 import Modal from "@/components/Modal";
+import { Field } from "@/components/ui";
 
-const defaults = {
+const DEFAULTS = {
   name: "",
   clientName: "",
   type: "",
-  brandPrimary: "#2B58E8",
-  brandAccent: "#0E1A3A",
+  brandPrimary: "#1F4BC5",
+  brandAccent: "#111110",
 };
 
+const TEXT_FIELDS = [
+  { key: "name", label: "Project name", placeholder: "Lumen Skincare" },
+  { key: "clientName", label: "Client name", placeholder: "Lumen Labs" },
+  {
+    key: "type",
+    label: "Type",
+    placeholder: "DTC e-commerce brand launch",
+    wide: true,
+  },
+];
+
+const COLOR_FIELDS = [
+  { key: "brandPrimary", label: "Primary colour" },
+  { key: "brandAccent", label: "Accent colour" },
+];
+
 export default function ProjectFormModal({ open, onClose, onSubmit }) {
-  const [form, setForm] = useState(defaults);
+  const [form, setForm] = useState(DEFAULTS);
+  const isValid = form.name.trim() && form.clientName.trim() && form.type.trim();
+
+  function update(key, value) {
+    setForm((current) => ({ ...current, [key]: value }));
+  }
 
   function handleSubmit(event) {
-    event.preventDefault();
-    if (!form.name || !form.clientName || !form.type) {
+    event?.preventDefault();
+    if (!isValid) {
       return;
     }
+
     onSubmit(form);
-    setForm(defaults);
+    setForm(DEFAULTS);
     onClose();
   }
 
@@ -28,48 +51,53 @@ export default function ProjectFormModal({ open, onClose, onSubmit }) {
     <Modal
       open={open}
       onClose={onClose}
-      title="New Project"
+      eyebrow="New project"
+      title="New project"
       footer={[
-        <button key="cancel" onClick={onClose} className="ledger-button ledger-button-secondary h-10 px-4 text-sm text-slate-600">
+        <button key="cancel" type="button" onClick={onClose} className="btn btn-ghost">
           Cancel
         </button>,
-        <button key="create" onClick={handleSubmit} className="ledger-button ledger-button-primary h-10 px-5 text-sm">
-          Create Project
+        <button
+          key="create"
+          type="button"
+          onClick={handleSubmit}
+          disabled={!isValid}
+          className="btn btn-primary"
+        >
+          Create project
         </button>,
       ]}
     >
       <form className="grid gap-4 sm:grid-cols-2" onSubmit={handleSubmit}>
-        {[
-          ["Project name", "name", "Lumen Skincare"],
-          ["Client name", "clientName", "Lumen Labs"],
-          ["Type", "type", "DTC e-commerce brand launch"],
-        ].map(([label, key, placeholder]) => (
-          <label key={key} className={`text-sm font-medium text-ledger-ink ${key === "type" ? "sm:col-span-2" : ""}`}>
-            <span className="mb-2 block">{label}</span>
+        {TEXT_FIELDS.map((field) => (
+          <Field
+            key={field.key}
+            label={field.label}
+            className={field.wide ? "sm:col-span-2" : ""}
+          >
             <input
-              value={form[key]}
-              onChange={(event) => setForm((current) => ({ ...current, [key]: event.target.value }))}
-              placeholder={placeholder}
-              className="ledger-input"
+              value={form[field.key]}
+              onChange={(event) => update(field.key, event.target.value)}
+              placeholder={field.placeholder}
+              className="field"
             />
-          </label>
+          </Field>
         ))}
-        {[
-          ["Primary color", "brandPrimary"],
-          ["Accent color", "brandAccent"],
-        ].map(([label, key]) => (
-          <label key={key} className="text-sm font-medium text-ledger-ink">
-            <span className="mb-2 block">{label}</span>
-            <div className="flex items-center gap-3 rounded-[14px] border border-ledger-border px-4 py-3">
+        {COLOR_FIELDS.map((field) => (
+          <Field key={field.key} label={field.label}>
+            <div className="flex h-[34px] items-center gap-2.5 border border-line px-2.5">
               <input
                 type="color"
-                value={form[key]}
-                onChange={(event) => setForm((current) => ({ ...current, [key]: event.target.value }))}
-                className="h-10 w-12 rounded-[10px] border-0 bg-transparent p-0"
+                value={form[field.key]}
+                onChange={(event) => update(field.key, event.target.value)}
+                aria-label={field.label}
+                className="h-[18px] w-[26px] cursor-pointer border-0 bg-transparent p-0"
               />
-              <span className="text-sm text-slate-500">{form[key]}</span>
+              <span className="num text-[12px] uppercase text-muted">
+                {form[field.key]}
+              </span>
             </div>
-          </label>
+          </Field>
         ))}
       </form>
     </Modal>

@@ -1,73 +1,55 @@
 import {
+  BoardSkeleton,
   CardGridSkeleton,
   ModuleSkeleton,
   PanelsSkeleton,
-  SkeletonBlock,
+  StripSkeleton,
+  TableSkeleton,
 } from "@/components/Skeleton";
 import { resolveRouteMeta } from "@/lib/pageMeta";
 
-function ProjectsHubSkeleton() {
-  return (
-    <>
-      <div className="mb-6 flex items-center justify-between gap-4">
-        <SkeletonBlock className="h-4 w-80 max-w-[60%]" />
-        <SkeletonBlock className="h-11 w-[150px] rounded-[14px]" />
-      </div>
-      <CardGridSkeleton count={6} />
-    </>
-  );
-}
-
-function TeamSkeleton() {
-  return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-4 rounded-[24px] border border-[#E4EBF7] bg-white p-5">
-        <div className="space-y-2">
-          <SkeletonBlock className="h-3 w-28" />
-          <SkeletonBlock className="h-5 w-52" />
-        </div>
-        <SkeletonBlock className="h-11 w-[220px] rounded-[14px]" />
-      </div>
-      <CardGridSkeleton count={4} columns="lg:grid-cols-2" />
-    </div>
-  );
-}
-
-function SettingsSkeleton() {
-  return (
-    <div className="grid gap-6 xl:grid-cols-[1.2fr_0.85fr]">
-      <PanelsSkeleton panels={2} rows={4} />
-      <PanelsSkeleton panels={2} rows={3} />
-    </div>
-  );
-}
-
 /**
  * The static shape a route paints before its data (or even its code) arrives.
- * Shared by the `loading.js` boundaries and the optimistic pending state so a
- * route always shows the same placeholder.
+ * Shared by the `loading.js` boundaries and the optimistic pending state, so a
+ * route always shows the same placeholder however it was reached.
  */
+export const MODULE_SKELETONS = {
+  overview: () => (
+    <div className="space-y-8">
+      <StripSkeleton cells={4} />
+      <PanelsSkeleton panels={1} rows={3} />
+      <CardGridSkeleton count={3} />
+    </div>
+  ),
+  leads: () => <ModuleSkeleton cards={5} rows={8} />,
+  campaigns: () => <ModuleSkeleton cards={4} rows={5} />,
+  calendar: () => <PanelsSkeleton panels={1} rows={6} />,
+  tasks: () => <BoardSkeleton />,
+  team: () => <ModuleSkeleton cards={3} rows={5} />,
+  approvals: () => <CardGridSkeleton count={2} columns="md:grid-cols-2" />,
+  reports: () => <PanelsSkeleton panels={2} rows={4} />,
+  "client-view": () => <ModuleSkeleton cards={4} rows={3} />,
+  "project-settings": () => <PanelsSkeleton panels={2} rows={4} />,
+};
+
+const WORKSPACE_SKELETONS = {
+  "/projects": () => <CardGridSkeleton count={3} />,
+  "/team": () => <ModuleSkeleton cards={3} rows={6} />,
+  "/settings": () => <PanelsSkeleton panels={2} rows={4} />,
+};
+
+/** The same placeholder a module route paints, addressable by module name. */
+export function ModuleSkeletonFor({ module }) {
+  return (MODULE_SKELETONS[module] || MODULE_SKELETONS.leads)();
+}
+
 export default function RouteSkeleton({ pathname }) {
-  const { projectId, module } = resolveRouteMeta(pathname);
+  const { module } = resolveRouteMeta(pathname);
 
-  if (!projectId) {
-    if (pathname?.startsWith("/team")) {
-      return <TeamSkeleton />;
-    }
-    if (pathname?.startsWith("/settings")) {
-      return <SettingsSkeleton />;
-    }
-    return <ProjectsHubSkeleton />;
+  if (module) {
+    return (MODULE_SKELETONS[module] || MODULE_SKELETONS.leads)();
   }
 
-  switch (module) {
-    case "tasks":
-      return <ModuleSkeleton cards={0} board />;
-    case "client-view":
-      return <ModuleSkeleton cards={4} rows={3} />;
-    case "project-settings":
-      return <PanelsSkeleton panels={2} rows={4} />;
-    default:
-      return <ModuleSkeleton cards={4} rows={5} />;
-  }
+  const segment = `/${(pathname || "").split("/").filter(Boolean)[0] || "projects"}`;
+  return (WORKSPACE_SKELETONS[segment] || WORKSPACE_SKELETONS["/projects"])();
 }

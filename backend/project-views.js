@@ -1,4 +1,8 @@
-import { getCollectionRecords, getRecord } from "./postgres-store.js";
+import {
+  getCollectionRecords,
+  getGroupedCounts,
+  getRecord,
+} from "./postgres-store.js";
 
 function notFound(message = "Project not found") {
   const error = new Error(message);
@@ -78,20 +82,45 @@ export async function getProjectShell(projectId) {
 }
 
 export async function getAppShellView() {
-  const [projects, teamMembers, projectMembers, approvals, reviewTasks] =
-    await Promise.all([
-      getCollectionRecords("projects"),
-      getCollectionRecords("teamMembers"),
-      getCollectionRecords("projectMembers"),
-      getCollectionRecords("approvals", { status: "Pending" }),
-      getCollectionRecords("tasks", { column: "Review" }),
-    ]);
+  const [
+    projects,
+    teamMembers,
+    projectMembers,
+    approvals,
+    reviewTasks,
+    leadCounts,
+    campaignCounts,
+    taskCounts,
+    pendingApprovalCounts,
+  ] = await Promise.all([
+    getCollectionRecords("projects"),
+    getCollectionRecords("teamMembers"),
+    getCollectionRecords("projectMembers"),
+    getCollectionRecords("approvals", { status: "Pending" }),
+    getCollectionRecords("tasks", { column: "Review" }),
+    getGroupedCounts("leads", "projectId"),
+    getGroupedCounts("campaigns", "projectId"),
+    getGroupedCounts("tasks", "projectId"),
+    getGroupedCounts("approvals", "projectId", { status: "Pending" }),
+  ]);
 
   return {
     projects: projects.map(toProject),
     teamMembers,
     projectMembers,
     unreadCount: approvals.length + reviewTasks.length,
+    // Per-project tallies for the sidebar badges, keyed by project id.
+    navCounts: Object.fromEntries(
+      projects.map((project) => [
+        project.id,
+        {
+          leads: leadCounts[project.id] || 0,
+          campaigns: campaignCounts[project.id] || 0,
+          tasks: taskCounts[project.id] || 0,
+          approvals: pendingApprovalCounts[project.id] || 0,
+        },
+      ]),
+    ),
   };
 }
 

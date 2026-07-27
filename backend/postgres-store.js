@@ -163,6 +163,30 @@ export async function getCollectionRecords(collection, filters = {}) {
   return rows.map((row) => mapRowToRecord(collection, row));
 }
 
+/**
+ * Counts rows grouped by one field. Used for the sidebar's per-module tallies,
+ * where pulling whole collections just to call `.length` would be wasteful.
+ */
+export async function getGroupedCounts(collection, groupField, filters = {}) {
+  if (!isBackendCollection(collection)) {
+    throw new Error(`Unknown backend collection: ${collection}`);
+  }
+
+  const config = getBackendCollectionConfig(collection);
+  const column = config.columns[groupField];
+  if (!column) {
+    throw new Error(`Unknown ${collection} field: ${groupField}`);
+  }
+
+  const where = buildFilterClause(collection, filters);
+  const rows = await queryRows(
+    `select ${column} as group_key, count(*)::int as total from ${config.table}${where.clause} group by ${column}`,
+    where.params,
+  );
+
+  return Object.fromEntries(rows.map((row) => [row.group_key, Number(row.total)]));
+}
+
 export async function getRecord(collection, recordId) {
   const config = getBackendCollectionConfig(collection);
   if (config.singleton) {

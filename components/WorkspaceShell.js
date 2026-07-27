@@ -16,28 +16,28 @@ export default function WorkspaceShell({ children }) {
   const pathname = usePathname();
   const { pendingPath } = useRouteTransition();
 
-  // While a navigation is pending the header and content already describe the
+  // While a navigation is pending the chrome and content already describe the
   // destination, so the click feels like it landed immediately.
   const activePath = pendingPath || pathname;
-  const { projectId, title, description, hidePageHeading, bare } =
-    resolveRouteMeta(activePath);
+  const meta = resolveRouteMeta(activePath);
   const content = pendingPath ? <RouteSkeleton pathname={pendingPath} /> : children;
 
-  if (bare) {
+  if (meta.bare) {
     return (
-      <div className="min-h-screen bg-[radial-gradient(circle_at_top,rgba(91,130,245,0.12),transparent_24%)] px-4 py-8 sm:px-6 xl:px-8">
-        <div className="mx-auto max-w-[1380px]">{content}</div>
+      <div className="min-h-screen bg-white px-4 py-8 sm:px-6">
+        <div className="mx-auto max-w-[1180px]">{content}</div>
       </div>
     );
   }
 
   return (
     <AppShell
-      title={hidePageHeading ? "" : title}
-      subtitle={hidePageHeading ? "" : description}
-      projectId={projectId}
-      projectSection={projectId ? title : null}
-      hidePageHeading={hidePageHeading}
+      title={meta.title}
+      subtitle={meta.description}
+      projectId={meta.projectId}
+      module={meta.module}
+      action={meta.action}
+      hidePageHeading={meta.hidePageHeading}
     >
       {content}
     </AppShell>

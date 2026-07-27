@@ -1,128 +1,79 @@
 "use client";
 
 import Link from "next/link";
-import {
-  Area,
-  AreaChart,
-  CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
 import EmptyState from "@/components/EmptyState";
-import { formatCurrency, formatNumber, monthLabel } from "@/lib/utils";
-import { SectionCard } from "@/components/project-modules/shared";
+import { MonthAxis, TrendArea } from "@/components/dashboard/Trend";
+import { Meter, Section, StatStrip } from "@/components/ui";
+import { formatCurrency, formatDecimal, formatNumber, monthLabel } from "@/lib/utils";
 
 export default function ClientViewScreen({ bundle }) {
   if (!bundle.series.length) {
     return (
       <EmptyState
         title="No performance data yet."
-        description="This client-facing view has no local data for the selected project yet."
+        description="This client-facing view has no data for the selected project yet."
       />
     );
   }
 
+  const { project, kpis, series, goals } = bundle;
+
   return (
-    <div className="space-y-6">
-      <Link
-        href={`/projects/${bundle.project.id}`}
-        className="inline-flex rounded-[14px] border border-[#E4EBF7] bg-white px-4 py-2 text-sm font-semibold text-ledger-blue shadow-sm"
-      >
-        Back to dashboard
-      </Link>
-      <div className="rounded-[24px] border border-[#E4EBF7] bg-white p-5 shadow-ledger sm:p-8">
-        <div
-          className="rounded-[20px] p-6 text-white sm:p-8"
-          style={{
-            background: `linear-gradient(135deg, ${bundle.project.brandPrimary}, ${bundle.project.brandAccent})`,
-          }}
-        >
-          <div className="text-sm uppercase tracking-[0.2em] text-white/70">
-            {bundle.project.clientName}
-          </div>
-          <div className="mt-3 text-3xl font-bold tracking-[-0.04em] sm:text-4xl">
-            {bundle.project.name}
-          </div>
-          <div className="mt-2 text-white/80">Read-only client summary for Ledger.</div>
+    <div className="space-y-9">
+      <div className="flex items-start justify-between gap-4 border-b border-edge pb-5">
+        <div className="min-w-0">
+          <div className="label">{project.clientName}</div>
+          <h1 className="display mt-2.5 text-[32px] text-ink">{project.name}</h1>
+          <p className="mt-2 text-[13px] text-muted">Read-only client summary.</p>
         </div>
-        <div className="mt-6 grid gap-4 md:grid-cols-4">
-          <div className="rounded-[18px] bg-slate-50 p-5">
-            <div className="text-sm text-slate-500">Traffic</div>
-            <div className="mt-2 text-3xl font-bold tracking-[-0.04em] text-ledger-ink">
-              {formatNumber(bundle.kpis.traffic.current)}
+        <Link href={`/projects/${project.id}`} className="btn btn-ghost shrink-0">
+          Back
+        </Link>
+      </div>
+
+      <StatStrip
+        marks
+        items={[
+          { label: "Traffic", value: formatNumber(kpis.traffic.current) },
+          { label: "Conversions", value: formatNumber(kpis.conversions.current) },
+          { label: "Cost per lead", value: formatCurrency(kpis.costPerLead.current) },
+          {
+            label: "Return on spend",
+            value: `${formatDecimal(kpis.roi.current, {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            })}×`,
+          },
+        ]}
+      />
+
+      <div className="grid gap-9 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+        <Section title="Traffic · 12 months" bodyClassName="pt-4">
+          <TrendArea
+            values={series.map((point) => point.traffic)}
+            color={project.brandPrimary}
+            height={210}
+          />
+          <MonthAxis months={series.map((point) => monthLabel(point.month))} />
+        </Section>
+
+        <Section title="Goals">
+          {goals.map((goal) => (
+            <div key={goal.label} className="border-b border-line-soft py-3.5">
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="text-[13px] text-ink">{goal.label}</span>
+                <span className="num text-[12px] text-muted">
+                  {goal.currentValue}/{goal.targetValue}
+                </span>
+              </div>
+              <Meter
+                value={(goal.currentValue / goal.targetValue) * 100}
+                tone={project.brandPrimary}
+                className="mt-2.5"
+              />
             </div>
-          </div>
-          <div className="rounded-[18px] bg-slate-50 p-5">
-            <div className="text-sm text-slate-500">Conversions</div>
-            <div className="mt-2 text-3xl font-bold tracking-[-0.04em] text-ledger-ink">
-              {bundle.kpis.conversions.current}
-            </div>
-          </div>
-          <div className="rounded-[18px] bg-slate-50 p-5">
-            <div className="text-sm text-slate-500">Cost per Lead</div>
-            <div className="mt-2 text-3xl font-bold tracking-[-0.04em] text-ledger-ink">
-              {formatCurrency(bundle.kpis.costPerLead.current)}
-            </div>
-          </div>
-          <div className="rounded-[18px] bg-slate-50 p-5">
-            <div className="text-sm text-slate-500">ROI</div>
-            <div className="mt-2 text-3xl font-bold tracking-[-0.04em] text-ledger-ink">
-              {bundle.kpis.roi.current.toFixed(2)}x
-            </div>
-          </div>
-        </div>
-        <div className="mt-6 grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-          <SectionCard title="Performance">
-            <div className="h-[280px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart
-                  data={bundle.series.map((item) => ({
-                    ...item,
-                    label: monthLabel(item.month),
-                  }))}
-                >
-                  <CartesianGrid stroke="#e5edf9" vertical={false} />
-                  <XAxis dataKey="label" axisLine={false} tickLine={false} stroke="#8b9bb8" />
-                  <YAxis axisLine={false} tickLine={false} stroke="#8b9bb8" />
-                  <Tooltip />
-                  <Area
-                    type="monotone"
-                    dataKey="traffic"
-                    stroke={bundle.project.brandAccent}
-                    fill={bundle.project.brandPrimary}
-                    fillOpacity={0.25}
-                    strokeWidth={3}
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-          </SectionCard>
-          <SectionCard title="Goals">
-            <div className="space-y-4">
-              {bundle.goals.map((goal) => (
-                <div key={goal.label}>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="font-medium text-ledger-ink">{goal.label}</span>
-                    <span className="text-slate-500">
-                      {goal.currentValue}/{goal.targetValue}
-                    </span>
-                  </div>
-                  <div className="mt-2 h-2 rounded-full bg-slate-100">
-                    <div
-                      className="h-2 rounded-full"
-                      style={{
-                        width: `${Math.min(100, (goal.currentValue / goal.targetValue) * 100)}%`,
-                        backgroundColor: bundle.project.brandAccent,
-                      }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </SectionCard>
-        </div>
+          ))}
+        </Section>
       </div>
     </div>
   );

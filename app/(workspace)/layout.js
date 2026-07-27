@@ -1,10 +1,13 @@
 import WorkspaceShell from "@/components/WorkspaceShell";
+import { PageActionProvider } from "@/context/PageAction";
 import { RouteTransitionProvider } from "@/context/RouteTransition";
 
 export default function WorkspaceLayout({ children }) {
   return (
     <RouteTransitionProvider>
-      <WorkspaceShell>{children}</WorkspaceShell>
+      <PageActionProvider>
+        <WorkspaceShell>{children}</WorkspaceShell>
+      </PageActionProvider>
     </RouteTransitionProvider>
   );
 }

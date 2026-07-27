@@ -1,786 +1,298 @@
 "use client";
-import {
-  Area,
-  AreaChart,
-  CartesianGrid,
-  Cell,
-  Line,
-  LineChart,
-  Pie,
-  PieChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
-import {
-  formatCurrency,
-  formatDate,
-  formatDecimal,
-  formatNumber,
-  monthLabel,
-} from "@/lib/utils";
+
 import Link from "next/link";
+import { useState } from "react";
+import { LegendDot, MonthAxis, TrendArea, TrendLines } from "@/components/dashboard/Trend";
+import {
+  getCampaignRows,
+  getChannelLegend,
+  getKpiItems,
+  getPerformanceMetrics,
+  getPipelineStages,
+  getReportingWindow,
+  relativeTime,
+} from "@/components/dashboard/overviewMetrics";
+import {
+  Avatar,
+  Checkbox,
+  Frame,
+  Meter,
+  MetaLink,
+  Section,
+  Segmented,
+  StatStrip,
+} from "@/components/ui";
+import { CHANNEL_RAMP } from "@/lib/palette";
+import { formatDate } from "@/lib/utils";
 
-const chartPalette = {
-  leadRate: "#2B58E8",
-  conversionRate: "#20B4C7",
-  costPerLead: "#FF7C8C",
-};
-
-const donutPalette = [
-  "#2B58E8",
-  "#1DB6D0",
-  "#10B981",
-  "#FB923C",
-  "#8B5CF6",
-  "#CBD5E1",
+const VIEW_OPTIONS = [
+  { value: "separate", label: "Separate" },
+  { value: "indexed", label: "Indexed" },
 ];
 
-const channelLabelMap = {
-  Search: "Organic Search",
-  Social: "Paid Social",
-  Email: "Email",
-  Paid: "Google Ads",
-};
-
-function StatIcon({ kind }) {
-  const icons = {
-    leads: (
-      <path d="M7.75 8.25a2.25 2.25 0 1 0 0-4.5 2.25 2.25 0 0 0 0 4.5Zm5.5 1.25a1.75 1.75 0 1 0 0-3.5 1.75 1.75 0 0 0 0 3.5ZM3.5 15.75c.55-2 2.08-3.25 4.25-3.25s3.7 1.25 4.25 3.25M11.5 15.75c.35-1.28 1.35-2.1 2.75-2.1 1.07 0 1.98.47 2.65 1.4" />
-    ),
-    conversions: (
-      <>
-        <circle cx="10" cy="10" r="5.5" />
-        <path
-          d="m10 7.5 1.9 1.2v2.45L10 12.5l-1.9-1.35"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </>
-    ),
-    cpl: (
-      <>
-        <path
-          d="M8 6.25h8M8 17.75h8M12 6.25v11.5M7 9.25c0-1.1.9-2 2-2h1m-3 7.5c0 1.1.9 2 2 2h1"
-          strokeLinecap="round"
-        />
-      </>
-    ),
-    roi: (
-      <>
-        <path d="M12 4a8 8 0 1 0 8 8" />
-        <path d="M12 8v4l3 2" strokeLinecap="round" strokeLinejoin="round" />
-      </>
-    ),
-  };
-
+function Performance({ months, metrics, view, onViewChange }) {
   return (
-    <div className="flex h-10 w-10 items-center justify-center rounded-[12px] border border-[#E2EAF7] bg-white text-ledger-blue">
-      <svg
-        viewBox="0 0 20 20"
-        className="h-6 w-6"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-      >
-        {icons[kind]}
-      </svg>
-    </div>
-  );
-}
-
-function SectionCard({ title, action, className = "", children }) {
-  return (
-    <section className={`ledger-card rounded-[20px] p-5 ${className}`}>
-      <div className="mb-4 flex items-center justify-between gap-3">
-        <h2 className="text-[15px] font-semibold tracking-[-0.01em] text-ledger-ink">
-          {title}
-        </h2>
-        {action}
-      </div>
-      {children}
-    </section>
-  );
-}
-
-function MiniSparkline({ data }) {
-  return (
-    <div className="mt-4 h-10">
-      <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={data.map((value, index) => ({ index, value }))}>
-          <Line
-            type="monotone"
-            dataKey="value"
-            stroke="#2B58E8"
-            strokeWidth={2.2}
-            dot={false}
-          />
-        </LineChart>
-      </ResponsiveContainer>
-    </div>
-  );
-}
-
-function KpiCard({
-  icon,
-  label,
-  value,
-  change,
-  comparison,
-  sparkline,
-  valueClassName = "",
-}) {
-  return (
-    <div className="ledger-card rounded-[18px] p-5 transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_16px_32px_rgba(43,88,232,0.08)]">
-      <div className="flex items-center gap-3">
-        <StatIcon kind={icon} />
-        <span className="text-[15px] font-semibold text-ledger-ink">
-          {label}
-        </span>
-      </div>
-      <div className="mt-5 flex items-end gap-3">
-        <div
-          className={`text-[20px] font-bold tracking-[-0.03em] text-ledger-ink md:text-[22px] ${valueClassName}`}
-        >
-          {value}
-        </div>
-        <div className="pb-1 text-[14px] font-semibold text-emerald-500">
-          {change}
-        </div>
-      </div>
-      <MiniSparkline data={sparkline} />
-      <p className="mt-3 text-[13px] text-[#8B9AB7]">{comparison}</p>
-    </div>
-  );
-}
-
-function avatarForMember(store, author) {
-  const member = store.teamMembers.find((item) => item.name === author);
-  if (!member) {
-    return { initials: author.slice(0, 2).toUpperCase(), color: "#CBD5E1" };
-  }
-
-  return {
-    initials: member.name
-      .split(" ")
-      .map((part) => part[0])
-      .join("")
-      .slice(0, 2),
-    color: member.avatarColor,
-  };
-}
-
-function channelLegendData(bundle) {
-  const base = Object.entries(
-    (bundle.campaigns || []).reduce((acc, campaign) => {
-      const key = channelLabelMap[campaign.channel] || campaign.channel;
-      acc[key] = (acc[key] || 0) + Number(campaign.conversions || 0);
-      return acc;
-    }, {}),
-  ).map(([name, raw]) => ({ name, raw }));
-  const total = base.reduce((sum, item) => sum + item.raw, 0) || 1;
-  const normalized = base.map((item) => ({
-    name: item.name,
-    value: Math.round((item.raw / total) * 100),
-  }));
-  const currentTotal = normalized.reduce((sum, item) => sum + item.value, 0);
-  if (currentTotal < 100) {
-    normalized.push({ name: "Other", value: 100 - currentTotal });
-  }
-  return normalized;
-}
-
-function campaignAccent(index) {
-  return ["#2B58E8", "#22C1D6", "#18B981", "#8B5CF6"][index] || "#2B58E8";
-}
-
-function formatRangeDate(date) {
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  }).format(date);
-}
-
-function getReportingWindow(series = []) {
-  const lastPoint = series.at(-1);
-  const baseDate = lastPoint?.month ? new Date(lastPoint.month) : new Date();
-  const activeMonth = new Date(
-    baseDate.getFullYear(),
-    baseDate.getMonth() - 1,
-    1,
-  );
-  const comparisonMonth = new Date(
-    activeMonth.getFullYear(),
-    activeMonth.getMonth() - 1,
-    1,
-  );
-  const activeEnd = new Date(
-    activeMonth.getFullYear(),
-    activeMonth.getMonth() + 1,
-    0,
-  );
-  const comparisonEnd = new Date(
-    comparisonMonth.getFullYear(),
-    comparisonMonth.getMonth() + 1,
-    0,
-  );
-
-  return {
-    rangeLabel: `${formatRangeDate(activeMonth)} - ${formatRangeDate(activeEnd)}`,
-    comparisonLabel: `vs ${formatRangeDate(comparisonMonth)} - ${formatRangeDate(comparisonEnd)}`,
-  };
-}
-
-function PerformanceTooltip({ active, label, payload }) {
-  if (!active || !payload?.length) {
-    return null;
-  }
-
-  const metricRows = [
-    {
-      key: "conversionRate",
-      label: "Conversion rate",
-      color: chartPalette.conversionRate,
-      suffix: "%",
-    },
-    {
-      key: "costPerLeadRate",
-      label: "Cost per lead",
-      color: chartPalette.costPerLead,
-      prefix: "$",
-    },
-    {
-      key: "leadEfficiency",
-      label: "Leads per $1k spend",
-      color: chartPalette.leadRate,
-    },
-  ];
-
-  const valueMap = Object.fromEntries(
-    payload.map((item) => [item.dataKey, item.value]),
-  );
-
-  return (
-    <div className="min-w-[220px] rounded-[18px] border border-[#D9E4F6] bg-white p-4 shadow-[0_18px_40px_rgba(15,23,42,0.08)]">
-      <div className="text-[18px] font-semibold text-ledger-ink">{label}</div>
-      <div className="mt-3 space-y-2.5">
-        {metricRows.map((metric) => {
-          const value = valueMap[metric.key];
-          return (
+    <Section
+      title="Performance · 12 months"
+      action={<Segmented options={VIEW_OPTIONS} value={view} onChange={onViewChange} />}
+    >
+      {view === "separate" ? (
+        <div>
+          {metrics.map((metric) => (
             <div
               key={metric.key}
-              className="flex items-center justify-between gap-4 rounded-[12px] bg-[#F8FAFD] px-3 py-2 text-[13px]"
+              className="grid items-center gap-4 border-b border-line-soft py-4 sm:grid-cols-[190px_minmax(0,1fr)] sm:gap-6"
             >
-              <div className="flex items-center gap-2 text-[#5E6E90]">
-                <span
-                  className="h-2.5 w-2.5 rounded-full"
-                  style={{ backgroundColor: metric.color }}
-                />
-                <span>{metric.label}</span>
+              <div className="min-w-0">
+                <LegendDot color={metric.color}>{metric.label}</LegendDot>
+                <div className="display mt-2 text-[22px] text-ink">
+                  {metric.format(metric.latest)}
+                </div>
+                <div className="mt-1.5 text-[11.5px] text-muted">
+                  range {metric.rangeFormat(metric.min)}–{metric.rangeFormat(metric.max)}
+                </div>
               </div>
-              <span className="font-semibold text-ledger-ink">
-                {metric.prefix || ""}
-                {formatDecimal(value, {
-                  minimumFractionDigits: metric.key === "costPerLeadRate" ? 2 : 1,
-                  maximumFractionDigits: metric.key === "costPerLeadRate" ? 2 : 1,
-                })}
-                {metric.suffix || ""}
-              </span>
+              <TrendArea values={metric.values} color={metric.color} height={64} />
             </div>
-          );
-        })}
-      </div>
-    </div>
+          ))}
+          <MonthAxis months={months} className="sm:pl-[214px]" />
+        </div>
+      ) : (
+        <div className="pt-4">
+          <div className="flex flex-wrap gap-x-5 gap-y-2">
+            {metrics.map((metric) => (
+              <LegendDot key={metric.key} color={metric.color}>
+                {metric.label}
+              </LegendDot>
+            ))}
+          </div>
+          <div className="mt-5">
+            <TrendLines
+              series={metrics.map((metric) => ({
+                key: metric.key,
+                color: metric.color,
+                values: metric.indexed,
+              }))}
+              height={232}
+            />
+            <MonthAxis months={months} />
+          </div>
+          <p className="mt-3 text-[11.5px] text-muted">
+            Indexed to {months[0]} = 100, so all three metrics share one scale.
+          </p>
+        </div>
+      )}
+    </Section>
   );
 }
 
-export default function OverviewDashboard({ bundle, recentActivity, store }) {
-  const leads = bundle.leads || [];
-  const campaigns = bundle.campaigns || [];
-  const tasks = bundle.tasks || [];
-  const totalLeads = bundle.leadCount ?? leads.length;
-  const totalConversions = campaigns.reduce(
-    (sum, campaign) => sum + Number(campaign.conversions || 0),
-    0,
+function ChannelBreakdown({ rows, leadTotal }) {
+  return (
+    <Section title="Leads by channel">
+      <div className="flex h-[7px] w-full gap-px pt-3">
+        {rows.map((row, index) => (
+          <span
+            key={row.name}
+            style={{
+              width: `${row.share}%`,
+              backgroundColor: CHANNEL_RAMP[index] || CHANNEL_RAMP.at(-1),
+            }}
+          />
+        ))}
+      </div>
+      <div className="mt-2">
+        {rows.map((row, index) => (
+          <div
+            key={row.name}
+            className="flex items-center gap-3 border-b border-line-soft py-2.5"
+          >
+            <span
+              className="h-[7px] w-[7px] shrink-0"
+              style={{ backgroundColor: CHANNEL_RAMP[index] || CHANNEL_RAMP.at(-1) }}
+            />
+            <span className="min-w-0 flex-1 truncate text-[13px] text-ink-soft">
+              {row.name}
+            </span>
+            <span className="num text-[13px] font-semibold text-ink">{row.share}%</span>
+            <span className="num w-8 text-right text-[11px] text-muted">{row.count}</span>
+          </div>
+        ))}
+      </div>
+      <p className="mt-3 text-[11.5px] text-muted">
+        {leadTotal} leads across {rows.length} attributed channels.
+      </p>
+    </Section>
   );
-  const totalSpend = campaigns.reduce(
-    (sum, campaign) => sum + Number(campaign.spent || 0),
-    0,
+}
+
+function Pipeline({ stages }) {
+  return (
+    <Section title="Pipeline">
+      {stages.map((stage) => (
+        <div key={stage.label} className="border-b border-line-soft py-4">
+          <div className="flex items-baseline justify-between gap-3">
+            <span className="text-[13px] font-semibold text-ink">{stage.label}</span>
+            <span className="flex items-baseline gap-2">
+              <span className="display text-[19px] text-ink">{stage.count}</span>
+              <span className="num text-[11px] text-muted">{stage.share.toFixed(1)}%</span>
+            </span>
+          </div>
+          <Meter value={stage.share} className="mt-2.5" />
+          <div className="mt-2 text-[11.5px] text-muted">{stage.caption}</div>
+        </div>
+      ))}
+    </Section>
   );
-  const wonValue = leads
-    .filter((lead) => lead.status === "Won")
-    .reduce((sum, lead) => sum + Number(lead.estimatedValue || 0), 0);
-  const costPerLead = totalLeads ? totalSpend / totalLeads : 0;
-  const roi = totalSpend ? wonValue / totalSpend : 0;
-  const previousLeadCount =
-    bundle.series.at(-2)?.leads || Math.max(1, totalLeads - 20);
-  const leadChange =
-    ((totalLeads - previousLeadCount) / previousLeadCount) * 100;
-  const channelLegend = channelLegendData(bundle);
-  const donutData = channelLegend.map((item, index) => ({
-    ...item,
-    fill: donutPalette[index],
-  }));
-  const reportingWindow = getReportingWindow(bundle.series);
-  const performanceSeries = bundle.series.map((item) => ({
-    ...item,
-    label: monthLabel(item.month),
-    leadEfficiency: item.spend ? (item.leads / item.spend) * 1000 : 0,
-    conversionRate: item.traffic ? (item.conversions / item.traffic) * 100 : 0,
-    costPerLeadRate: item.leads ? item.spend / Math.max(1, item.leads) : 0,
-  }));
-  const statusCounts = leads.reduce((acc, lead) => {
-    acc[lead.status] = (acc[lead.status] || 0) + 1;
-    return acc;
-  }, {});
-  const funnelStages = ["New", "Contacted", "Qualified", "Won"].map((label) => {
-    const count = statusCounts[label] || 0;
-    return {
-      label,
-      count,
-      percent: `${totalLeads ? ((count / totalLeads) * 100).toFixed(1) : "0.0"}%`,
-    };
-  });
+}
+
+function TopCampaigns({ rows, href }) {
+  return (
+    <Section title="Top campaigns" action={<MetaLink href={href}>All</MetaLink>}>
+      {rows.map((row) => (
+        <div key={row.id} className="border-b border-line-soft py-4">
+          <div className="flex items-baseline justify-between gap-3">
+            <span className="min-w-0 truncate text-[13px] font-semibold text-ink">
+              {row.name}
+            </span>
+            <span className="num shrink-0 text-[13px] text-ink">{row.spend}</span>
+          </div>
+          <div className="mt-1.5 flex items-baseline justify-between gap-3">
+            <span className="label truncate">{row.channel}</span>
+            <span className="num shrink-0 text-[11px] text-muted">{row.detail}</span>
+          </div>
+          <Meter value={row.share} className="mt-2.5" />
+        </div>
+      ))}
+    </Section>
+  );
+}
+
+function Activity({ items, members, href }) {
+  return (
+    <Section title="Activity" action={<MetaLink href={href}>All</MetaLink>}>
+      {items.slice(0, 5).map((item, index) => (
+        <div key={item.id} className="flex gap-3 border-b border-line-soft py-3.5">
+          <Avatar
+            name={item.author}
+            color={members.find((member) => member.name === item.author)?.avatarColor}
+            className="mt-px h-[22px] w-[22px]"
+          />
+          <div className="min-w-0 flex-1">
+            <div className="flex items-baseline justify-between gap-3">
+              <span className="truncate text-[13px] font-semibold text-ink">
+                {item.author}
+              </span>
+              <span className="num shrink-0 text-[11px] text-muted">
+                {relativeTime(index)}
+              </span>
+            </div>
+            <p className="mt-1 text-[12.5px] leading-5 text-muted">{item.content}</p>
+          </div>
+        </div>
+      ))}
+    </Section>
+  );
+}
+
+function DueThisWeek({ tasks, href }) {
+  return (
+    <Section title="Due this week" action={<MetaLink href={href}>Board</MetaLink>}>
+      {tasks.map((task) => {
+        const done = task.column === "Done";
+
+        return (
+          <div
+            key={task.id}
+            className="flex items-center gap-3 border-b border-line-soft py-3"
+          >
+            <Checkbox checked={done} onChange={() => {}} label={task.title} />
+            <span
+              className={
+                done
+                  ? "min-w-0 flex-1 truncate text-[13px] text-faint line-through"
+                  : "min-w-0 flex-1 truncate text-[13px] text-ink"
+              }
+            >
+              {task.title}
+            </span>
+            <span className="label hidden shrink-0 truncate sm:block">{task.assignee}</span>
+            <span className="num w-14 shrink-0 text-right text-[11px] text-muted">
+              {formatDate(task.dueDate, { month: "short", day: "numeric", year: undefined })}
+            </span>
+          </div>
+        );
+      })}
+    </Section>
+  );
+}
+
+export default function OverviewDashboard({ bundle, recentActivity = [], store }) {
+  const [view, setView] = useState("separate");
+
+  const project = bundle.project;
+  const window = getReportingWindow(bundle.series);
+  const performance = getPerformanceMetrics(bundle.series);
+  const channels = getChannelLegend(bundle);
+  const base = `/projects/${project.id}`;
 
   return (
-    <div className="space-y-5">
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_260px] lg:items-start">
+    <div className="space-y-9">
+      <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <h1 className="display text-[32px] text-ink sm:text-[38px]">{project.name}</h1>
+          <p className="mt-2 text-[13.5px] text-muted">
+            {project.type} · {project.clientName} · active since{" "}
+            {formatDate(project.createdDate, { month: "long", year: "numeric", day: undefined })}
+          </p>
+        </div>
+        <div className="shrink-0 sm:text-right">
+          <div className="label">Reporting period</div>
+          <div className="mt-2 text-[15px] font-semibold text-ink">{window.range}</div>
+          <div className="label mt-1.5 normal-case tracking-normal">{window.comparison}</div>
+        </div>
+      </div>
+
+      <StatStrip marks items={getKpiItems(bundle)} />
+
+      <div className="grid gap-9 xl:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
+        <Performance
+          months={performance.months}
+          metrics={performance.metrics}
+          view={view}
+          onViewChange={setView}
+        />
+        <ChannelBreakdown rows={channels.rows} leadTotal={channels.leadTotal} />
+      </div>
+
+      <div className="grid gap-9 xl:grid-cols-3">
+        <Pipeline stages={getPipelineStages(bundle)} />
+        <TopCampaigns rows={getCampaignRows(bundle)} href={`${base}/campaigns`} />
+        <Activity
+          items={recentActivity}
+          members={store?.teamMembers || []}
+          href={`${base}/leads`}
+        />
+      </div>
+
+      <div className="grid gap-9 xl:grid-cols-2">
+        <DueThisWeek
+          tasks={bundle.upcomingTasks || bundle.tasks || []}
+          href={`${base}/tasks`}
+        />
         <div>
-          <h1 className="text-[30px] font-bold tracking-[-0.02em] text-ledger-ink">
-            Good morning, Alex
-          </h1>
-          <p className="mt-1 text-[17px] text-[#6E7F9F]">
-            Here&apos;s what&apos;s happening with {bundle.project.name} today.
-          </p>
+          <Section title="Note" bodyClassName="pt-4">
+            <Frame marks className="p-5">
+              <p className="max-w-prose text-[14px] leading-7 text-ink-soft">
+                Lead conversion is up 23% on last month, carried by paid social. Cost
+                per lead is the metric to watch — it sits above target for the third
+                week.
+              </p>
+              <Link href={`${base}/reports`} className="btn btn-ghost mt-5">
+                View insights
+              </Link>
+            </Frame>
+          </Section>
         </div>
-        <div className="justify-self-start rounded-[16px] border border-[#E3EBF7] bg-white px-4 py-3 lg:justify-self-end">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#8FA0BE]">
-            Reporting period
-          </div>
-          <div className="mt-1 flex items-center gap-2 text-[16px] font-semibold text-ledger-ink">
-            <span>{reportingWindow.rangeLabel}</span>
-          </div>
-        </div>
-      </div>
-
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)_280px] xl:grid-rows-[auto_auto]">
-        <div className="grid gap-4 md:grid-cols-2 xl:col-span-2 xl:grid-cols-4">
-          <KpiCard
-            icon="leads"
-            label="Total Leads"
-            value={formatNumber(totalLeads)}
-            change={`Up ${leadChange.toFixed(1)}%`}
-            comparison={reportingWindow.comparisonLabel}
-            sparkline={bundle.series.map((item) => item.leads)}
-          />
-          <KpiCard
-            icon="conversions"
-            label="Conversions"
-            value={formatNumber(totalConversions)}
-            change="Up 23.4%"
-            comparison={reportingWindow.comparisonLabel}
-            sparkline={bundle.series.map((item) => item.conversions)}
-          />
-          <KpiCard
-            icon="cpl"
-            label="Cost per Lead"
-            value={formatCurrency(costPerLead, "USD")}
-            change="Down 8.3%"
-            comparison={reportingWindow.comparisonLabel}
-            sparkline={bundle.series.map((item) => item.spend / Math.max(1, item.leads))}
-          />
-          <KpiCard
-            icon="roi"
-            label="ROI"
-            value={`${roi.toFixed(2)}x`}
-            change="Up 12.7%"
-            comparison={reportingWindow.comparisonLabel}
-            sparkline={bundle.series.map((item) => (item.spend ? item.conversions / item.spend : 0))}
-          />
-        </div>
-
-        <SectionCard
-          title="Recent Activity"
-          action={
-            <Link
-              href={`/projects/${bundle.project.id}/leads`}
-              className="text-[13px] font-semibold text-ledger-blue"
-            >
-              View all
-            </Link>
-          }
-          className="xl:row-span-2 xl:pb-4"
-        >
-          <div className="space-y-5">
-            {recentActivity.slice(0, 5).map((item, index) => {
-              const avatar = avatarForMember(store, item.author);
-              return (
-                <div key={item.id} className="flex items-start gap-3">
-                  <div
-                    className="flex h-10 w-10 items-center justify-center rounded-full text-[11px] font-semibold text-white"
-                    style={{ backgroundColor: avatar.color }}
-                  >
-                    {avatar.initials}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="text-[15px] font-semibold text-ledger-ink">
-                        {item.author}
-                      </div>
-                      <div className="whitespace-nowrap text-[12px] text-[#8B9AB7]">
-                        {index === 0
-                          ? "2m ago"
-                          : index === 1
-                            ? "15m ago"
-                            : index === 2
-                              ? "1h ago"
-                              : index === 3
-                                ? "2h ago"
-                                : "3h ago"}
-                      </div>
-                    </div>
-                    <p className="mt-1 text-[14px] leading-6 text-[#6E7F9F]">
-                      {item.content}
-                    </p>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </SectionCard>
-
-        <SectionCard
-          title="Performance Overview"
-          action={
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="hidden items-center gap-4 text-[13px] text-slate-500 md:flex">
-                <span className="flex items-center gap-2">
-                  <span className="h-2.5 w-2.5 rounded-full bg-[#2B58E8]" />
-                  Leads per $1k spend
-                </span>
-                <span className="flex items-center gap-2">
-                  <span className="h-2.5 w-2.5 rounded-full bg-[#20B4C7]" />
-                  Conversion rate
-                </span>
-                <span className="flex items-center gap-2">
-                  <span className="h-2.5 w-2.5 rounded-full bg-[#FF7C8C]" />
-                  Cost per lead
-                </span>
-              </div>
-              <button className="ledger-button ledger-button-secondary h-10 rounded-[12px] px-3 text-[13px] font-medium text-[#6E7F9F]">
-                Last 12 months
-              </button>
-            </div>
-          }
-        >
-          <div className="h-[250px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart
-                data={performanceSeries}
-                margin={{ top: 10, right: 8, left: -24, bottom: 0 }}
-              >
-                <defs>
-                  <linearGradient id="overviewArea" x1="0" x2="0" y1="0" y2="1">
-                    <stop offset="0%" stopColor="#2B58E8" stopOpacity={0.18} />
-                    <stop offset="100%" stopColor="#2B58E8" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid stroke="#EEF3FB" vertical={false} />
-                <XAxis
-                  dataKey="label"
-                  axisLine={false}
-                  tickLine={false}
-                  stroke="#94A3B8"
-                  fontSize={12}
-                />
-                <YAxis
-                  axisLine={false}
-                  tickLine={false}
-                  stroke="#94A3B8"
-                  fontSize={12}
-                />
-                <Tooltip content={<PerformanceTooltip />} />
-                <Area
-                  type="monotone"
-                  dataKey="leadEfficiency"
-                  stroke={chartPalette.leadRate}
-                  fill="url(#overviewArea)"
-                  strokeWidth={2.5}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="conversionRate"
-                  stroke={chartPalette.conversionRate}
-                  strokeWidth={2.4}
-                  dot={false}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="costPerLeadRate"
-                  stroke={chartPalette.costPerLead}
-                  strokeWidth={2.2}
-                  dot={false}
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </SectionCard>
-
-        <SectionCard title="Leads by Channel" className="relative">
-          <div className="flex flex-col gap-6 lg:flex-row lg:items-center">
-            <div className="relative mx-auto flex h-[220px] w-[220px] items-center justify-center sm:h-[244px] sm:w-[244px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={donutData}
-                    dataKey="value"
-                    innerRadius={68}
-                    outerRadius={98}
-                    stroke="none"
-                    paddingAngle={2}
-                  >
-                    {donutData.map((item) => (
-                      <Cell key={item.name} fill={item.fill} />
-                    ))}
-                  </Pie>
-                </PieChart>
-              </ResponsiveContainer>
-              <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
-                <div className="text-[30px] font-bold tracking-[-0.03em] text-ledger-ink">
-                  {totalLeads}
-                </div>
-                <div className="mt-1 text-[14px] text-slate-500">
-                  Total Leads
-                </div>
-              </div>
-            </div>
-            <div className="flex-1 space-y-3">
-              {channelLegend.map((item, index) => (
-                <div
-                  key={item.name}
-                  className="flex items-center justify-between gap-3 text-[14px]"
-                >
-                  <div className="flex items-center gap-2.5 text-slate-600">
-                    <span
-                      className="h-2.5 w-2.5 rounded-full"
-                      style={{ backgroundColor: donutPalette[index] }}
-                    />
-                    <span>{item.name}</span>
-                  </div>
-                  <span className="font-medium text-ledger-ink">
-                    {item.value}%
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </SectionCard>
-      </div>
-
-      <div className="grid gap-4 xl:grid-cols-[1.25fr_1fr_1fr]">
-        <SectionCard
-          title="Top Campaigns"
-          action={
-            <Link
-              href={`/projects/${bundle.project.id}/campaigns`}
-              className="text-[13px] font-semibold text-ledger-blue"
-            >
-              View all
-            </Link>
-          }
-        >
-          <div className="hidden grid-cols-[1.8fr_0.6fr_0.8fr_0.6fr] gap-3 px-1 pb-3 text-[12px] uppercase tracking-[0.12em] text-slate-400 md:grid">
-            <span>Campaign</span>
-            <span>Spend</span>
-            <span>Conversions</span>
-            <span>CPL</span>
-          </div>
-          <div className="space-y-4">
-            {(bundle.topCampaigns || bundle.campaigns).map((campaign, index) => (
-              <div
-                key={campaign.id}
-                className="rounded-[18px] border border-[#E8EEF8] p-4 md:border-0 md:p-0"
-              >
-                <div className="grid items-center gap-3 text-[14px] md:grid-cols-[1.8fr_0.6fr_0.8fr_0.6fr_0.28fr]">
-                <div className="flex items-center gap-3">
-                  <div
-                    className="flex h-9 w-9 items-center justify-center rounded-xl text-sm font-semibold text-white"
-                    style={{ backgroundColor: campaignAccent(index) }}
-                  >
-                    {campaign.name.slice(0, 1)}
-                  </div>
-                  <div>
-                    <div className="font-semibold text-ledger-ink">
-                      {campaign.name}
-                    </div>
-                    <div className="mt-0.5 text-[13px] text-slate-500">
-                      {channelLabelMap[campaign.channel] || campaign.channel}
-                    </div>
-                  </div>
-                </div>
-                <div className="text-slate-600">{formatCurrency(campaign.spent)}</div>
-                <div className="text-slate-600">
-                  {campaign.conversions}
-                </div>
-                <div className="text-slate-600">
-                  {formatCurrency(
-                    campaign.conversions
-                      ? campaign.spent / Math.max(1, campaign.conversions)
-                      : 0,
-                  )}
-                </div>
-                <div className="h-2 rounded-full bg-slate-100">
-                  <div
-                    className="h-2 rounded-full"
-                    style={{
-                      width: `${55 + index * 12}%`,
-                      backgroundColor: campaignAccent(index),
-                    }}
-                  />
-                </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </SectionCard>
-
-        <SectionCard
-          title="Lead Funnel"
-          action={
-            <Link
-              href={`/projects/${bundle.project.id}/leads`}
-              className="text-[13px] font-semibold text-ledger-blue"
-            >
-              View full report
-            </Link>
-          }
-        >
-          <div className="space-y-4">
-            {funnelStages.map((stage, index) => (
-              <div
-                key={stage.label}
-                className="grid grid-cols-[1fr_auto] items-center gap-3"
-              >
-                <div className="h-8 rounded-xl bg-slate-100">
-                  <div
-                    className="flex h-8 items-center justify-between rounded-xl px-3 text-[13px] font-medium"
-                    style={{
-                      width: `${totalLeads ? Math.max(18, (stage.count / totalLeads) * 100) : 18}%`,
-                      color: index === 0 ? "#fff" : "#183153",
-                      backgroundColor: ["#2B58E8", "#BFD1FF", "#D5E7FF", "#DDF6EF"][index],
-                    }}
-                  >
-                    <span>{stage.label}</span>
-                    <span>{stage.count}</span>
-                  </div>
-                </div>
-                <div className="text-[13px] font-medium text-ledger-ink">
-                  {stage.percent}
-                </div>
-              </div>
-            ))}
-          </div>
-        </SectionCard>
-
-        <SectionCard
-          title="Upcoming Tasks"
-          action={
-            <Link
-              href={`/projects/${bundle.project.id}/tasks`}
-              className="text-[13px] font-semibold text-ledger-blue"
-            >
-              View all
-            </Link>
-          }
-        >
-          <div className="ledger-scrollbar max-h-[440px] space-y-3 overflow-y-auto pr-1">
-            {(bundle.upcomingTasks || tasks).map((task) => {
-                const done = task.column === "Done";
-                return (
-                  <div
-                    key={task.id}
-                    className="rounded-[16px] border border-[#E6EDF8] bg-[#FBFDFF] px-4 py-3"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-start gap-3">
-                        <span
-                          className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 ${
-                            done
-                              ? "border-ledger-blue bg-ledger-blue text-white"
-                              : "border-[#D7E2F4] bg-white"
-                          }`}
-                        >
-                          {done ? (
-                            <svg
-                              viewBox="0 0 20 20"
-                              className="h-3.5 w-3.5"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="2.2"
-                            >
-                              <path
-                                d="m5.5 10.25 2.8 2.8 6.2-6.55"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                              />
-                            </svg>
-                          ) : null}
-                        </span>
-                        <div>
-                          <div
-                            className={`text-[14px] font-medium ${
-                              done ? "text-slate-400 line-through" : "text-ledger-ink"
-                            }`}
-                          >
-                            {task.title}
-                          </div>
-                          <div className="mt-1 text-[12px] text-slate-500">
-                            {task.assignee}
-                            {task.description ? ` · ${task.description}` : ""}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="text-[13px] font-medium uppercase tracking-[0.08em] text-slate-500">
-                        {formatDate(task.dueDate, {
-                          month: "short",
-                          day: "numeric",
-                        })}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-          </div>
-        </SectionCard>
-      </div>
-
-      <div className="flex flex-col items-start justify-between gap-4 rounded-[18px] border border-[#DCE7F8] bg-[#F7FAFF] px-5 py-4 shadow-[0_8px_24px_rgba(43,88,232,0.04)] md:flex-row md:items-center">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-[12px] border border-[#DCE7F8] bg-white text-ledger-blue shadow-sm">
-            <svg
-              viewBox="0 0 20 20"
-              className="h-6 w-6"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.8"
-            >
-              <path
-                d="M4 13.5h3.5l2-3 2.5 2.5L16 7"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          </div>
-          <p className="text-[15px] text-[#5E6E90]">
-            You&apos;re doing great! Your lead conversion rate is up 23%
-            compared to last month.
-          </p>
-        </div>
-        <button className="ledger-button ledger-button-primary h-10 rounded-[12px] px-5 text-[14px]">
-          View Insights &gt;
-        </button>
       </div>
     </div>
   );

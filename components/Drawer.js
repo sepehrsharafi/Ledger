@@ -1,34 +1,51 @@
 "use client";
 
-export default function Drawer({ open, onClose, title, children }) {
+import { useEffect } from "react";
+import { cn } from "@/lib/utils";
+
+export default function Drawer({ open, onClose, title, eyebrow, children }) {
+  useEffect(() => {
+    function handleKeyDown(event) {
+      if (event.key === "Escape" && open) {
+        onClose?.();
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [open, onClose]);
+
   return (
     <div
-      className={`fixed inset-0 z-50 transition ${open ? "pointer-events-auto" : "pointer-events-none"}`}
+      className={cn(
+        "fixed inset-0 z-50",
+        open ? "pointer-events-auto" : "pointer-events-none",
+      )}
+      aria-hidden={!open}
     >
       <div
         onClick={onClose}
-        className={`absolute inset-0 bg-slate-950/20 transition ${open ? "opacity-100" : "opacity-0"}`}
+        className={cn(
+          "absolute inset-0 bg-ink/20 transition-opacity duration-200",
+          open ? "opacity-100" : "opacity-0",
+        )}
       />
       <div
-        className={`ledger-scrollbar absolute right-0 top-0 flex h-full w-full max-w-[560px] flex-col overflow-y-auto border-l border-[#E4EBF7] bg-white px-6 py-5 shadow-[0_24px_60px_rgba(15,23,42,0.14)] transition duration-300 ${open ? "translate-x-0" : "translate-x-full"}`}
+        className={cn(
+          "absolute inset-y-0 right-0 flex w-full max-w-[480px] flex-col border-l border-line bg-white transition-transform duration-200",
+          open ? "translate-x-0" : "translate-x-full",
+        )}
       >
-        <div className="mb-6 flex items-center justify-between">
-          <h2 className="text-[22px] font-bold tracking-[-0.03em] text-ledger-ink">
-            {title}
-          </h2>
-          <button
-            onClick={onClose}
-            className="rounded-[12px] p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
-          >
-            <svg
-              viewBox="0 0 20 20"
-              className="h-5 w-5 fill-none stroke-current stroke-2"
-            >
-              <path d="M5 5l10 10M15 5 5 15" strokeLinecap="round" />
-            </svg>
+        <div className="flex flex-none items-center justify-between gap-4 border-b border-line px-5 py-3.5">
+          <div className="label">{eyebrow || "Detail"}</div>
+          <button type="button" onClick={onClose} className="btn btn-ghost h-[26px] px-2.5">
+            Close
           </button>
         </div>
-        {children}
+        <div className="thin-scroll min-h-0 flex-1 overflow-y-auto px-5 py-5">
+          {title ? <h2 className="display mb-5 text-[24px] text-ink">{title}</h2> : null}
+          {children}
+        </div>
       </div>
     </div>
   );

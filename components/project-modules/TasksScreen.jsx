@@ -1,17 +1,71 @@
 "use client";
 
 import { useState } from "react";
-import Badge from "@/components/Badge";
-import Drawer from "@/components/Drawer";
 import EmptyState from "@/components/EmptyState";
-import { cn, formatDate } from "@/lib/utils";
+import { Avatar, Chip, Frame, Pill } from "@/components/ui";
 import {
-  inputDateValue,
-  isOverdueDate,
-  panelClassName,
-  taskColumns,
-  taskPriorities,
-} from "@/components/project-modules/shared";
+  TaskComposerDrawer,
+  TaskDetailDrawer,
+} from "@/components/project-modules/TaskDrawers";
+import { isOverdueDate, taskColumns } from "@/components/project-modules/shared";
+import { usePageAction } from "@/context/PageAction";
+import { cn, formatDate } from "@/lib/utils";
+
+function initials(name = "") {
+  return name
+    .split(" ")
+    .filter(Boolean)
+    .map((part) => part[0])
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+}
+
+function TaskCard({ task, dragging, onOpen, onDragStart, onDragEnd }) {
+  const overdue = isOverdueDate(task.dueDate, task.column === "Done");
+
+  return (
+    <div
+      draggable
+      role="button"
+      tabIndex={0}
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
+      onClick={onOpen}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onOpen();
+        }
+      }}
+      className={cn(
+        "cursor-pointer border border-line bg-white p-3 transition-colors hover:border-ink",
+        dragging ? "opacity-50" : "",
+      )}
+    >
+      <div className="flex items-start justify-between gap-2.5">
+        <span className="min-w-0 text-[13px] font-semibold leading-5 text-ink">
+          {task.title}
+        </span>
+        <Pill tone={task.priority}>{task.priority}</Pill>
+      </div>
+      {task.description ? (
+        <p className="mt-2 text-[11.5px] leading-5 text-muted">{task.description}</p>
+      ) : null}
+      <div className="mt-3.5 flex items-center justify-between gap-2 border-t border-line-soft pt-2.5">
+        <span className="flex min-w-0 items-center gap-1.5">
+          <Avatar name={task.assignee} variant="outline" className="h-5 w-5" />
+          <span className="label truncate">{task.assignee}</span>
+        </span>
+        <span
+          className={cn("num shrink-0 text-[11px]", overdue ? "text-neg" : "text-muted")}
+        >
+          {formatDate(task.dueDate, { month: "short", day: "numeric", year: undefined })}
+        </span>
+      </div>
+    </div>
+  );
+}
 
 export default function TasksScreen({
   bundle,
@@ -21,387 +75,123 @@ export default function TasksScreen({
   onDeleteTask,
   store,
 }) {
-  const [draggedTaskId, setDraggedTaskId] = useState(null);
+  const [draggedId, setDraggedId] = useState(null);
   const [assigneeFilter, setAssigneeFilter] = useState("All");
   const [selectedTask, setSelectedTask] = useState(null);
-  const [taskComposerOpen, setTaskComposerOpen] = useState(false);
-  const [taskDraft, setTaskDraft] = useState({
-    title: "",
-    description: "",
-    column: "To Do",
-    assignee: store.teamMembers[0]?.name || "Alex Morgan",
-    dueDate: inputDateValue(),
-    priority: "Medium",
-  });
-  const taskDraftIsValid = taskDraft.title.trim() && taskDraft.dueDate;
+  const [composerOpen, setComposerOpen] = useState(false);
 
-  if (!bundle.tasks.length) {
+  usePageAction(() => setComposerOpen(true));
+
+  const tasks = bundle.tasks || [];
+
+  if (!tasks.length) {
     return (
       <EmptyState
         title="No tasks yet."
-        description="Create local tasks for this project to populate the kanban board."
+        description="Create tasks for this project to populate the delivery board."
       />
     );
   }
 
-  const taskAssignees = ["All", ...store.teamMembers.map((member) => member.name)];
-  const visibleTasks =
+  const visible =
     assigneeFilter === "All"
-      ? bundle.tasks
-      : bundle.tasks.filter((task) => task.assignee === assigneeFilter);
+      ? tasks
+      : tasks.filter((task) => task.assignee === assigneeFilter);
 
   return (
     <>
-      <div className="space-y-4">
-        <div className={cn(panelClassName, "flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between")}>
-          <div>
-            <div className="text-[16px] font-semibold text-ledger-ink">Delivery Board</div>
-            <div className="mt-1 text-[14px] text-[#6E7F9F]">
-              Create tasks, edit them in place, and drag work across the pipeline.
-            </div>
-          </div>
-          <button
-            onClick={() => setTaskComposerOpen(true)}
-            className="ledger-button ledger-button-primary w-full sm:w-auto"
-          >
-            New Task
-          </button>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {taskAssignees.map((name) => {
-            const initials =
-              name === "All"
-                ? "ALL"
-                : name
-                    .split(" ")
-                    .map((part) => part[0])
-                    .join("")
-                    .slice(0, 2);
-            const active = assigneeFilter === name;
-            return (
-              <button
-                key={name}
-                onClick={() => setAssigneeFilter(name)}
-                className={cn(
-                  "flex items-center gap-2 rounded-full border px-3 py-2 text-[13px] font-semibold transition",
-                  active
-                    ? "border-ledger-blue bg-[#EEF4FF] text-ledger-blue"
-                    : "border-[#E3EBF7] bg-white text-[#61708E] hover:border-[#C9D8F2]",
-                )}
-              >
-                <span
-                  className={cn(
-                    "flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-bold",
-                    active ? "bg-ledger-blue text-white" : "bg-slate-100 text-slate-500",
-                  )}
-                >
-                  {initials}
-                </span>
-                <span className="hidden sm:inline">{name}</span>
-              </button>
-            );
-          })}
+      <div className="space-y-5">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="label mr-1">Assignee</span>
+          {["All", ...store.teamMembers.map((member) => member.name)].map((name) => (
+            <Chip
+              key={name}
+              active={assigneeFilter === name}
+              onClick={() => setAssigneeFilter(name)}
+              title={name}
+            >
+              {name === "All" ? "All" : initials(name)}
+            </Chip>
+          ))}
         </div>
 
-        <div className="grid gap-4 xl:grid-cols-4">
-          {taskColumns.map((column) => (
-            <div
-              key={column}
-              className={cn(panelClassName, "p-4 transition", draggedTaskId ? "border-dashed" : "")}
-              onDragOver={(event) => {
-                event.preventDefault();
-                event.dataTransfer.dropEffect = "move";
-              }}
-              onDrop={(event) => {
-                event.preventDefault();
-                const taskId = event.dataTransfer.getData("text/task-id") || draggedTaskId;
-                if (taskId) {
-                  onMoveTask(taskId, column);
-                }
-                setDraggedTaskId(null);
-              }}
-            >
-              <div className="mb-4 flex items-center justify-between">
-                <h3 className="font-bold tracking-[-0.02em] text-ledger-ink">{column}</h3>
-                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-500">
-                  {visibleTasks.filter((task) => task.column === column).length}
-                </span>
-              </div>
-              <div className="mb-4 text-[13px] text-[#8A98B3]">
-                Drag cards here or open a task to edit details.
-              </div>
-              <div className="space-y-3">
-                {visibleTasks
-                  .filter((task) => task.column === column)
-                  .map((task) => (
-                    <div
-                      key={task.id}
-                      draggable
-                      onDragStart={(event) => {
-                        setDraggedTaskId(task.id);
-                        event.dataTransfer.setData("text/task-id", task.id);
-                        event.dataTransfer.effectAllowed = "move";
-                      }}
-                      onDragEnd={() => setDraggedTaskId(null)}
-                      className={cn(
-                        "cursor-pointer rounded-[16px] border border-ledger-border bg-slate-50 p-4 transition",
-                        draggedTaskId === task.id
-                          ? "opacity-60 shadow-[0_12px_24px_rgba(15,23,42,0.08)]"
-                          : "hover:border-[#C9D8F2]",
-                      )}
-                      onClick={() => setSelectedTask({ ...task })}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter" || event.key === " ") {
-                          event.preventDefault();
-                          setSelectedTask({ ...task });
-                        }
-                      }}
-                      role="button"
-                      tabIndex={0}
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex-1 text-left">
-                          <div className="font-semibold text-ledger-ink">{task.title}</div>
-                          <div className="mt-2 text-sm leading-6 text-slate-500">
-                            {task.description}
-                          </div>
-                        </div>
-                        <Badge tone={task.priority}>{task.priority}</Badge>
-                      </div>
-                      <div className="mt-4 text-xs uppercase tracking-[0.18em] text-slate-400">
-                        {task.assignee}
-                      </div>
-                      <div
-                        className={cn(
-                          "mt-1 text-sm",
-                          isOverdueDate(task.dueDate, task.column === "Done")
-                            ? "font-semibold text-rose-600"
-                            : "text-slate-500",
-                        )}
-                      >
-                        {formatDate(task.dueDate, { month: "short", day: "numeric" })}
-                        {isOverdueDate(task.dueDate, task.column === "Done") ? " • Overdue" : ""}
-                      </div>
-                    </div>
-                  ))}
-              </div>
-            </div>
-          ))}
+        <div className="thin-scroll -mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
+          <Frame
+            className="grid-hairline min-w-[820px]"
+            style={{ gridTemplateColumns: `repeat(${taskColumns.length}, minmax(0, 1fr))` }}
+          >
+            {taskColumns.map((column) => {
+              const items = visible.filter((task) => task.column === column);
+
+              return (
+                <div
+                  key={column}
+                  onDragOver={(event) => {
+                    event.preventDefault();
+                    event.dataTransfer.dropEffect = "move";
+                  }}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    const taskId =
+                      event.dataTransfer.getData("text/task-id") || draggedId;
+                    if (taskId) {
+                      onMoveTask(taskId, column);
+                    }
+                    setDraggedId(null);
+                  }}
+                  className="min-w-0 p-3.5"
+                >
+                  <div className="flex items-baseline justify-between gap-2 border-b border-edge pb-2">
+                    <span className="label label-ink font-semibold">{column}</span>
+                    <span className="num text-[13px] font-semibold text-ink">
+                      {items.length}
+                    </span>
+                  </div>
+                  <div className="mt-3 space-y-2.5">
+                    {items.map((task) => (
+                      <TaskCard
+                        key={task.id}
+                        task={task}
+                        dragging={draggedId === task.id}
+                        onOpen={() => setSelectedTask({ ...task })}
+                        onDragStart={(event) => {
+                          setDraggedId(task.id);
+                          event.dataTransfer.setData("text/task-id", task.id);
+                          event.dataTransfer.effectAllowed = "move";
+                        }}
+                        onDragEnd={() => setDraggedId(null)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </Frame>
         </div>
       </div>
 
-      <Drawer
-        open={Boolean(selectedTask)}
+      <TaskDetailDrawer
+        task={selectedTask}
+        teamMembers={store.teamMembers}
+        onChange={(patch) => setSelectedTask((current) => ({ ...current, ...patch }))}
         onClose={() => setSelectedTask(null)}
-        title={selectedTask?.title || "Task"}
-      >
-        {selectedTask ? (
-          <div className="grid gap-4 sm:grid-cols-2">
-            <label className="text-sm font-medium text-ledger-ink sm:col-span-2">
-              <span className="mb-2 block">Title</span>
-              <input
-                value={selectedTask.title}
-                onChange={(event) =>
-                  setSelectedTask((current) => ({ ...current, title: event.target.value }))
-                }
-                className="ledger-input"
-              />
-            </label>
-            <label className="text-sm font-medium text-ledger-ink sm:col-span-2">
-              <span className="mb-2 block">Description</span>
-              <textarea
-                value={selectedTask.description}
-                onChange={(event) =>
-                  setSelectedTask((current) => ({
-                    ...current,
-                    description: event.target.value,
-                  }))
-                }
-                rows={4}
-                className="ledger-textarea"
-              />
-            </label>
-            <label className="text-sm font-medium text-ledger-ink">
-              <span className="mb-2 block">Stage</span>
-              <select
-                value={selectedTask.column}
-                onChange={(event) =>
-                  setSelectedTask((current) => ({ ...current, column: event.target.value }))
-                }
-                className="ledger-select"
-              >
-                {taskColumns.map((item) => (
-                  <option key={item}>{item}</option>
-                ))}
-              </select>
-            </label>
-            <label className="text-sm font-medium text-ledger-ink">
-              <span className="mb-2 block">Priority</span>
-              <select
-                value={selectedTask.priority}
-                onChange={(event) =>
-                  setSelectedTask((current) => ({ ...current, priority: event.target.value }))
-                }
-                className="ledger-select"
-              >
-                {taskPriorities.map((item) => (
-                  <option key={item}>{item}</option>
-                ))}
-              </select>
-            </label>
-            <label className="text-sm font-medium text-ledger-ink">
-              <span className="mb-2 block">Due date</span>
-              <input
-                type="date"
-                value={inputDateValue(selectedTask.dueDate)}
-                onChange={(event) =>
-                  setSelectedTask((current) => ({ ...current, dueDate: event.target.value }))
-                }
-                className="ledger-input"
-              />
-            </label>
-            <label className="text-sm font-medium text-ledger-ink">
-              <span className="mb-2 block">Assignee</span>
-              <select
-                value={selectedTask.assignee}
-                onChange={(event) =>
-                  setSelectedTask((current) => ({ ...current, assignee: event.target.value }))
-                }
-                className="ledger-select"
-              >
-                {store.teamMembers.map((member) => (
-                  <option key={member.id}>{member.name}</option>
-                ))}
-              </select>
-            </label>
-            <div className="flex items-center justify-between gap-3 sm:col-span-2">
-              <button
-                onClick={async () => {
-                  await onDeleteTask(selectedTask.id);
-                  setSelectedTask(null);
-                }}
-                className="rounded-[14px] border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-100"
-              >
-                Delete Task
-              </button>
-              <button
-                disabled={!String(selectedTask.title).trim()}
-                onClick={() => {
-                  if (!String(selectedTask.title).trim()) {
-                    return;
-                  }
-                  onUpdateTask(selectedTask.id, selectedTask);
-                  setSelectedTask(null);
-                }}
-                className="ledger-button ledger-button-primary min-w-[150px] disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Save Task
-              </button>
-            </div>
-          </div>
-        ) : null}
-      </Drawer>
+        onSave={() => {
+          onUpdateTask(selectedTask.id, selectedTask);
+          setSelectedTask(null);
+        }}
+        onDelete={async () => {
+          await onDeleteTask(selectedTask.id);
+          setSelectedTask(null);
+        }}
+      />
 
-      <Drawer
-        open={taskComposerOpen}
-        onClose={() => setTaskComposerOpen(false)}
-        title="New Task"
-      >
-        <div className="grid gap-4 sm:grid-cols-2">
-          <label className="text-sm font-medium text-ledger-ink sm:col-span-2">
-            <span className="mb-2 block">Title</span>
-            <input
-              value={taskDraft.title}
-              onChange={(event) =>
-                setTaskDraft((current) => ({ ...current, title: event.target.value }))
-              }
-              className="ledger-input"
-            />
-          </label>
-          <label className="text-sm font-medium text-ledger-ink sm:col-span-2">
-            <span className="mb-2 block">Description</span>
-            <textarea
-              value={taskDraft.description}
-              onChange={(event) =>
-                setTaskDraft((current) => ({
-                  ...current,
-                  description: event.target.value,
-                }))
-              }
-              rows={4}
-              className="ledger-textarea"
-            />
-          </label>
-          <label className="text-sm font-medium text-ledger-ink">
-            <span className="mb-2 block">Stage</span>
-            <select
-              value={taskDraft.column}
-              onChange={(event) =>
-                setTaskDraft((current) => ({ ...current, column: event.target.value }))
-              }
-              className="ledger-select"
-            >
-              {taskColumns.map((item) => (
-                <option key={item}>{item}</option>
-              ))}
-            </select>
-          </label>
-          <label className="text-sm font-medium text-ledger-ink">
-            <span className="mb-2 block">Priority</span>
-            <select
-              value={taskDraft.priority}
-              onChange={(event) =>
-                setTaskDraft((current) => ({ ...current, priority: event.target.value }))
-              }
-              className="ledger-select"
-            >
-              {taskPriorities.map((item) => (
-                <option key={item}>{item}</option>
-              ))}
-            </select>
-          </label>
-          <label className="text-sm font-medium text-ledger-ink">
-            <span className="mb-2 block">Due date</span>
-            <input
-              type="date"
-              value={taskDraft.dueDate}
-              onChange={(event) =>
-                setTaskDraft((current) => ({ ...current, dueDate: event.target.value }))
-              }
-              className="ledger-input"
-            />
-          </label>
-          <label className="text-sm font-medium text-ledger-ink">
-            <span className="mb-2 block">Assignee</span>
-            <select
-              value={taskDraft.assignee}
-              onChange={(event) =>
-                setTaskDraft((current) => ({ ...current, assignee: event.target.value }))
-              }
-              className="ledger-select"
-            >
-              {store.teamMembers.map((member) => (
-                <option key={member.id}>{member.name}</option>
-              ))}
-            </select>
-          </label>
-          <div className="flex justify-end sm:col-span-2">
-            <button
-              disabled={!taskDraftIsValid}
-              onClick={() => {
-                if (!taskDraftIsValid) {
-                  return;
-                }
-                onCreateTask(bundle.project.id, taskDraft);
-                setTaskComposerOpen(false);
-              }}
-              className="ledger-button ledger-button-primary min-w-[150px] disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Save Task
-            </button>
-          </div>
-        </div>
-      </Drawer>
+      <TaskComposerDrawer
+        open={composerOpen}
+        onClose={() => setComposerOpen(false)}
+        onCreate={onCreateTask}
+        projectId={bundle.project.id}
+        teamMembers={store.teamMembers}
+      />
     </>
   );
 }

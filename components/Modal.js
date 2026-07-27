@@ -1,17 +1,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { cn } from "@/lib/utils";
 
-export default function Modal({ open, onClose, title, children, footer }) {
+export default function Modal({ open, onClose, title, eyebrow, children, footer }) {
   const [mounted, setMounted] = useState(open);
 
   useEffect(() => {
     if (open) {
       setMounted(true);
-      return;
+      return undefined;
     }
 
-    const timeout = setTimeout(() => setMounted(false), 180);
+    const timeout = setTimeout(() => setMounted(false), 160);
     return () => clearTimeout(timeout);
   }, [open]);
 
@@ -32,42 +33,36 @@ export default function Modal({ open, onClose, title, children, footer }) {
 
   return (
     <div
-      className={`fixed inset-0 z-50 overflow-y-auto transition duration-200 ${
-        open
-          ? "bg-slate-950/35 backdrop-blur-sm"
-          : "pointer-events-none bg-slate-950/0 backdrop-blur-[0px]"
-      }`}
+      className={cn(
+        "fixed inset-0 z-50 overflow-y-auto transition-opacity duration-150",
+        open ? "bg-ink/25" : "pointer-events-none opacity-0",
+      )}
     >
-      <div className="flex min-h-full items-start justify-center p-4 sm:items-center">
+      <div className="flex min-h-full items-start justify-center p-4 sm:items-center sm:p-6">
         <div
-          className={`ledger-scrollbar flex w-full max-w-7xl max-h-[calc(100dvh-2rem)] flex-col overflow-hidden rounded-[24px] border border-[#E4EBF7] bg-white shadow-[0_24px_60px_rgba(15,23,42,0.14)] transition duration-200 ease-out ${
-            open
-              ? "translate-y-0 scale-100 opacity-100"
-              : "translate-y-2 scale-[0.985] opacity-0"
-          }`}
+          className={cn(
+            "flex max-h-[calc(100dvh-2rem)] w-full max-w-[760px] flex-col border border-line bg-white transition duration-150",
+            open ? "translate-y-0 opacity-100" : "translate-y-1 opacity-0",
+          )}
         >
-          <div className="flex items-center justify-between border-b border-[#E4EBF7] px-6 py-5">
-            <h2 className="text-[24px] font-bold tracking-[-0.03em] text-ledger-ink">
-              {title}
-            </h2>
+          <div className="flex flex-none items-center justify-between gap-4 border-b border-line px-5 py-3.5">
+            <div className="label">{eyebrow || title}</div>
             <button
+              type="button"
               onClick={onClose}
-              className="rounded-[12px] p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+              className="btn btn-ghost h-[26px] px-2.5"
             >
-              <span className="sr-only">Close</span>
-              <svg
-                viewBox="0 0 20 20"
-                className="h-5 w-5 fill-none stroke-current stroke-2"
-              >
-                <path d="M5 5l10 10M15 5 5 15" strokeLinecap="round" />
-              </svg>
+              Close
             </button>
           </div>
-          <div className="ledger-scrollbar min-h-0 flex-1 overflow-y-auto px-6 py-6">
+          <div className="thin-scroll min-h-0 flex-1 overflow-y-auto px-5 py-5">
+            {eyebrow ? (
+              <h2 className="display mb-5 text-[24px] text-ink">{title}</h2>
+            ) : null}
             {children}
           </div>
           {footer ? (
-            <div className="flex flex-none justify-end gap-3 border-t border-[#E4EBF7] px-6 py-5">
+            <div className="flex flex-none flex-wrap justify-end gap-2.5 border-t border-line px-5 py-3.5">
               {footer}
             </div>
           ) : null}

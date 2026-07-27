@@ -2,26 +2,60 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import Badge from "@/components/Badge";
 import ProjectFormModal from "@/components/ProjectFormModal";
-import { SkeletonBlock } from "@/components/Skeleton";
+import { CardGridSkeleton } from "@/components/Skeleton";
+import { Pill } from "@/components/ui";
+import { usePageAction } from "@/context/PageAction";
 import { useRouteTransition } from "@/context/RouteTransition";
 import { useProjectsHubData } from "@/lib/useLedgerData";
 
-function StatBlock({ label, value, accent = false }) {
+function ProjectCard({ project, onOpen }) {
   return (
-    <div
-      className={`rounded-[18px] border px-4 py-4 ${accent ? "border-[#DCE5FB] bg-[#F6F8FF]" : "border-[#EEF2F8] bg-[#FBFCFE]"}`}
+    <button
+      type="button"
+      onClick={onOpen}
+      className="group flex flex-col border border-line bg-white text-left transition-colors hover:border-ink"
     >
-      <div
-        className={`text-[12px] font-semibold uppercase tracking-[0.18em] ${accent ? "text-ledger-blue" : "text-[#8FA0BE]"}`}
-      >
-        {label}
-      </div>
-      <div className="mt-3 text-[20px] font-bold tracking-[-0.03em] text-ledger-ink">
-        {value}
-      </div>
-    </div>
+      <span className="h-[3px] w-full" style={{ backgroundColor: project.brandPrimary }} />
+      <span className="flex flex-1 flex-col p-5">
+        <span className="flex items-start justify-between gap-4">
+          <span className="min-w-0">
+            <span className="display block truncate text-[21px] text-ink">
+              {project.name}
+            </span>
+            <span className="label mt-1.5 block truncate">{project.clientName}</span>
+          </span>
+          <Pill tone={project.status}>{project.status}</Pill>
+        </span>
+
+        <span className="mt-4 block text-[13px] text-ink-soft">{project.type}</span>
+
+        <span className="grid-hairline mt-5 grid grid-cols-2 border border-line">
+          <span className="block px-3.5 py-3">
+            <span className="label block">Leads</span>
+            <span className="display mt-1.5 block text-[20px] text-ink">
+              {project.leadCount}
+            </span>
+          </span>
+          <span className="block px-3.5 py-3">
+            <span className="label block truncate">{project.topKpiLabel}</span>
+            <span className="display mt-1.5 block text-[20px] text-ink">
+              {project.topKpiValue.replace("EUR", "€")}
+            </span>
+          </span>
+        </span>
+
+        <span className="label mt-auto flex items-center justify-between gap-3 pt-5">
+          <span className="truncate">
+            {project.campaignCount} campaigns · {project.taskCount} tasks ·{" "}
+            {project.teamCount} people
+          </span>
+          <span className="shrink-0 text-accent transition-transform group-hover:translate-x-0.5">
+            Open →
+          </span>
+        </span>
+      </span>
+    </button>
   );
 }
 
@@ -31,143 +65,34 @@ export default function ProjectsHubPage() {
   const { addProject, projectCards, isLoading } = useProjectsHubData();
   const [modalOpen, setModalOpen] = useState(false);
 
+  usePageAction(() => setModalOpen(true));
+
   function openProject(projectId) {
     const href = `/projects/${projectId}`;
     startNavigation(href);
     router.push(href);
   }
 
-  async function handleCreateProject(form) {
-    const newProjectId = await addProject(form);
-    openProject(newProjectId);
-  }
-
   return (
     <>
-      <div className="mb-6 flex items-center justify-between gap-4">
-        <div className="text-[14px] text-[#8A98B3]">
-          Select a workspace to open its dashboard, pipeline, and delivery
-          modules.
-        </div>
-        <button
-          onClick={() => setModalOpen(true)}
-          className="ledger-button ledger-button-primary min-w-[150px]"
-        >
-          New Project
-        </button>
-      </div>
-
-      <div className="grid gap-5 lg:grid-cols-2 2xl:grid-cols-3">
-        {isLoading
-          ? Array.from({ length: 6 }).map((_, index) => (
-              <div
-                key={index}
-                className="overflow-hidden rounded-[24px] border border-[#E4EBF7] bg-white p-6 shadow-[0_12px_32px_rgba(15,23,42,0.04)]"
-              >
-                <SkeletonBlock className="h-[10px] w-full rounded-full" />
-                <div className="mt-6 flex items-start justify-between gap-4">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-3">
-                      <SkeletonBlock className="h-11 w-11 rounded-[14px]" />
-                      <div className="min-w-0 flex-1">
-                        <SkeletonBlock className="h-8 w-40" />
-                        <SkeletonBlock className="mt-2 h-4 w-28" />
-                      </div>
-                    </div>
-                    <SkeletonBlock className="mt-5 h-5 w-48" />
-                  </div>
-                  <SkeletonBlock className="h-7 w-20 rounded-full" />
-                </div>
-                <div className="mt-6 grid grid-cols-2 gap-4">
-                  <SkeletonBlock className="h-24 w-full rounded-[18px]" />
-                  <SkeletonBlock className="h-24 w-full rounded-[18px]" />
-                </div>
-                <SkeletonBlock className="mt-5 h-14 w-full rounded-[18px]" />
-              </div>
-            ))
-          : projectCards.map((project) => (
-          <button
-            key={project.id}
-            onClick={() => openProject(project.id)}
-            className="group overflow-hidden rounded-[24px] border border-[#E4EBF7] bg-white text-left shadow-[0_12px_32px_rgba(15,23,42,0.04)] transition duration-200 hover:-translate-y-1 hover:shadow-[0_24px_54px_rgba(15,23,42,0.08)]"
-          >
-            <div
-              className="h-[10px] w-full"
-              style={{
-                background: `linear-gradient(90deg, ${project.brandPrimary}, ${project.brandAccent})`,
-              }}
+      {isLoading ? (
+        <CardGridSkeleton count={3} />
+      ) : (
+        <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+          {projectCards.map((project) => (
+            <ProjectCard
+              key={project.id}
+              project={project}
+              onOpen={() => openProject(project.id)}
             />
-            <div className="p-6">
-              <div className="flex items-start justify-between gap-4">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-3">
-                    <div
-                      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px] text-sm font-bold text-white"
-                      style={{
-                        background: `linear-gradient(135deg, ${project.brandPrimary}, ${project.brandAccent})`,
-                      }}
-                    >
-                      {project.name
-                        .split(" ")
-                        .map((part) => part[0])
-                        .slice(0, 2)
-                        .join("")}
-                    </div>
-                    <div className="min-w-0">
-                      <h2 className="truncate text-[27px] font-bold tracking-[-0.05em] text-ledger-ink">
-                        {project.name}
-                      </h2>
-                      <p className="mt-1 text-[15px] text-[#64748B]">
-                        {project.clientName}
-                      </p>
-                    </div>
-                  </div>
-                  <p className="mt-5 max-w-[44ch] text-[15px] leading-7 text-[#5E6E90]">
-                    {project.type}
-                  </p>
-                </div>
-                <Badge tone={project.status}>{project.status}</Badge>
-              </div>
-
-              <div className="mt-6 grid grid-cols-2 gap-4">
-                <StatBlock label="Leads" value={project.leadCount} />
-                <StatBlock
-                  label={project.topKpiLabel}
-                  value={project.topKpiValue.replace("EUR", "EUR ")}
-                  accent
-                />
-              </div>
-
-              <div className="mt-5 flex items-center justify-between rounded-[18px] bg-[#F8FAFD] px-4 py-3">
-                <div className="text-[13px] text-[#7E8DAA]">
-                  <span className="font-semibold text-ledger-ink">
-                    {project.campaignCount}
-                  </span>{" "}
-                  campaigns
-                  <span className="mx-2 text-[#C2CCDD]">•</span>
-                  <span className="font-semibold text-ledger-ink">
-                    {project.taskCount}
-                  </span>{" "}
-                  tasks
-                  <span className="mx-2 text-[#C2CCDD]">•</span>
-                  <span className="font-semibold text-ledger-ink">
-                    {project.teamCount}
-                  </span>{" "}
-                  people
-                </div>
-                <div className="text-[14px] font-semibold text-ledger-blue transition group-hover:translate-x-0.5">
-                  Open workspace
-                </div>
-              </div>
-            </div>
-          </button>
-            ))}
-      </div>
+          ))}
+        </div>
+      )}
 
       <ProjectFormModal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
-        onSubmit={handleCreateProject}
+        onSubmit={async (form) => openProject(await addProject(form))}
       />
     </>
   );

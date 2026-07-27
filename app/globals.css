@@ -1,42 +1,57 @@
 @import "tailwindcss";
 
+/* ---------------------------------------------------------------------------
+   Ledger design tokens. The system is deliberately flat and editorial: square
+   corners, hairline rules, no shadows, and a single blue accent. Screens should
+   compose Tailwind utilities from these tokens rather than inventing new hex
+   values, so the whole app stays on one palette.
+   --------------------------------------------------------------------------- */
 @theme {
-  --color-ledger-blue: #2b58e8;
-  --color-ledger-glow: #5b82f5;
-  --color-ledger-ink: #0e1a3a;
-  --color-ledger-mist: #f6f9ff;
-  --color-ledger-border: #dbe5f3;
-  --color-ledger-muted: #7180a0;
-  --shadow-ledger: 0 18px 44px rgba(15, 23, 42, 0.06);
-  --shadow-ledger-sm: 0 10px 24px rgba(15, 23, 42, 0.05);
+  --color-ink: #111110;
+  --color-ink-soft: #44443f;
+  --color-muted: #86867f;
+  --color-faint: #adaca5;
+  --color-line: #e4e3de;
+  --color-line-soft: #efeeea;
+  --color-edge: #1a1a18;
+  /* Deeper and cooler than a stock royal blue — a violet cast reads badly next
+     to the warm neutrals above. `accent-ink` is the hover state. */
+  --color-accent: #1f4bc5;
+  --color-accent-ink: #18399a;
+  --color-pos: #1c7a4c;
+  --color-neg: #a4342a;
+  --color-warn: #9a5a12;
+  --color-shade: #fafaf8;
 }
 
+/* The two families are injected by next/font onto <body>, so they are aliased
+   here rather than in @theme (which resolves against :root). */
 :root {
   color-scheme: light;
-  --background: #f9fbff;
-  --foreground: #0e1a3a;
+  --type-sans: var(--font-display), "Helvetica Neue", Arial, sans-serif;
+  --type-mono: var(--font-mono-label), ui-monospace, monospace;
 }
 
+/* Element resets belong in `base` so component classes and Tailwind
+   utilities can still override them. */
+@layer base {
 * {
   box-sizing: border-box;
 }
 
-html {
-  background: #fbfdff;
+html,
+body {
+  margin: 0;
+  background: #fff;
+  color: var(--color-ink);
 }
 
 body {
-  margin: 0;
   min-height: 100vh;
-  background: #fbfdff;
-  color: var(--foreground);
-  font-family: var(--font-ledger), sans-serif;
+  font-family: var(--type-sans);
+  font-size: 14px;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-}
-
-body * {
-  font-family: inherit;
 }
 
 button,
@@ -44,11 +59,7 @@ input,
 select,
 textarea {
   font: inherit;
-}
-
-a {
   color: inherit;
-  text-decoration: none;
 }
 
 button,
@@ -56,125 +67,204 @@ select {
   cursor: pointer;
 }
 
-input::placeholder,
-textarea::placeholder {
-  color: #8ea0c2;
+a {
+  color: inherit;
+  text-decoration: none;
 }
 
-.ledger-surface {
-  border: 1px solid #e3ebf7;
-  background: #fff;
-  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.04);
+::placeholder {
+  color: var(--color-faint);
+}
+} /* end @layer base */
+
+/* ---------------------------------------------------------------------------
+   Component classes live in the `components` layer so Tailwind utilities — which
+   land in the later `utilities` layer — can still override any single property
+   on them (`normal-case`, `text-ink`, `h-7`, and so on).
+   --------------------------------------------------------------------------- */
+@layer components {
+
+/* --- Type roles ----------------------------------------------------------- */
+
+/* Small tracked-out uppercase label. Used for every eyebrow, column head and
+   section title in the app. */
+.label {
+  font-family: var(--type-mono);
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.2;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-muted);
 }
 
-.ledger-card {
-  border: 1px solid #e4ebf7;
-  background: #fff;
-  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.035);
+.label-ink {
+  color: var(--color-ink);
 }
 
-.ledger-input,
-.ledger-select,
-.ledger-textarea {
+/* Tabular figures for anything that lines up in a column. */
+.num {
+  font-family: var(--type-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.display {
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.02;
+}
+
+/* --- Controls ------------------------------------------------------------- */
+
+.field {
   width: 100%;
-  border: 1px solid #d8e3f3;
+  height: 34px;
+  border: 1px solid var(--color-line);
   background: #fff;
-  color: #0e1a3a;
-  transition: border-color 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
+  padding: 0 10px;
+  font-size: 13px;
+  transition: border-color 0.15s ease;
 }
 
-.ledger-input,
-.ledger-select {
-  height: 44px;
-  border-radius: 14px;
-  padding: 0 14px;
-  font-size: 14px;
-}
-
-.ledger-textarea {
-  border-radius: 16px;
-  padding: 14px;
-  font-size: 14px;
+.field-area {
+  width: 100%;
+  border: 1px solid var(--color-line);
+  background: #fff;
+  padding: 10px;
+  font-size: 13px;
   line-height: 1.6;
   resize: vertical;
+  transition: border-color 0.15s ease;
 }
 
-.ledger-input:focus,
-.ledger-select:focus,
-.ledger-textarea:focus {
+.field:focus,
+.field-area:focus {
   outline: none;
-  border-color: #2b58e8;
-  box-shadow: 0 0 0 4px rgba(43, 88, 232, 0.08);
+  border-color: var(--color-ink);
 }
 
-.ledger-select {
+select.field {
   appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 20 20' fill='none'%3E%3Cpath d='M5 7.5L10 12.5L15 7.5' stroke='%238191B0' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-  background-position: right 14px center;
+  padding-right: 28px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 20 20' fill='none'%3E%3Cpath d='M5 8l5 5 5-5' stroke='%2386867F' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-position: right 8px center;
   background-repeat: no-repeat;
-  background-size: 18px 18px;
-  padding-right: 40px;
 }
 
-.ledger-button {
+.btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 14px;
-  height: 46px;
-  padding: 0 20px;
-  font-size: 15px;
+  gap: 6px;
+  height: 34px;
+  padding: 0 14px;
+  border: 1px solid transparent;
+  font-family: var(--type-mono);
+  font-size: 10px;
   font-weight: 600;
-  transition: background-color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, color 0.18s ease;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
 }
 
-.ledger-button-primary {
-  background: #2b58e8;
+.btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.btn-primary {
+  background: var(--color-accent);
   color: #fff;
-  box-shadow: 0 16px 36px rgba(43, 88, 232, 0.18);
 }
 
-.ledger-button-primary:hover {
-  background: #244dcd;
+.btn-primary:not(:disabled):hover {
+  background: var(--color-accent-ink);
 }
 
-.ledger-button-secondary {
-  border: 1px solid #dbe5f3;
+.btn-ghost {
+  border-color: var(--color-line);
   background: #fff;
-  color: #0e1a3a;
-  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.03);
+  color: var(--color-ink);
 }
 
-.recharts-wrapper,
-.recharts-wrapper *,
-.recharts-surface,
-.recharts-text {
-  font-family: var(--font-ledger), sans-serif !important;
+.btn-ghost:not(:disabled):hover {
+  border-color: var(--color-ink);
 }
 
-.ledger-scrollbar {
+.btn-danger {
+  border-color: color-mix(in srgb, var(--color-neg) 28%, #fff);
+  background: #fff;
+  color: var(--color-neg);
+}
+
+.btn-danger:not(:disabled):hover {
+  border-color: var(--color-neg);
+}
+} /* end @layer components */
+
+/* --- Hairline grids -------------------------------------------------------
+   A 1px gap over a line-coloured background draws the dividers between cells,
+   so a grid can gain or lose columns at any breakpoint without any border
+   bookkeeping. `--cols` is the column count once there is room for it.
+   -------------------------------------------------------------------------- */
+
+@layer components {
+.grid-hairline {
+  display: grid;
+  gap: 1px;
+  background: var(--color-line);
+}
+
+.grid-hairline > * {
+  background: #fff;
+}
+
+.grid-cells {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@media (min-width: 640px) {
+  .grid-cells {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1024px) {
+  .grid-cells {
+    grid-template-columns: repeat(var(--cols, 4), minmax(0, 1fr));
+  }
+}
+
+/* --- Scrollbars ----------------------------------------------------------- */
+
+.thin-scroll {
   scrollbar-width: thin;
-  scrollbar-color: #d4deef transparent;
+  scrollbar-color: #d6d5d0 transparent;
 }
 
-.ledger-scrollbar::-webkit-scrollbar {
+.thin-scroll::-webkit-scrollbar {
   width: 8px;
+  height: 8px;
 }
 
-.ledger-scrollbar::-webkit-scrollbar-track {
+.thin-scroll::-webkit-scrollbar-track {
   background: transparent;
 }
 
-.ledger-scrollbar::-webkit-scrollbar-thumb {
-  background: #d4deef;
-  border-radius: 999px;
+.thin-scroll::-webkit-scrollbar-thumb {
+  background: #d6d5d0;
 }
 
-.scrollbar-none {
+.no-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
 
-.scrollbar-none::-webkit-scrollbar {
+.no-scrollbar::-webkit-scrollbar {
   display: none;
 }
+} /* end @layer components */

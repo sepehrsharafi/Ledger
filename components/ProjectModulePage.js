@@ -3,215 +3,182 @@
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import EmptyState from "@/components/EmptyState";
-import { ModuleSkeleton } from "@/components/Skeleton";
+import { ModuleSkeletonFor } from "@/components/RouteSkeleton";
 import {
   useProjectLeadsData,
   useProjectModuleData,
   useProjectOverviewData,
 } from "@/lib/useLedgerData";
 
-function CardsFallback() {
-  return <ModuleSkeleton cards={4} rows={5} />;
+/**
+ * One entry per module route. Each screen is its own dynamic chunk, so a route
+ * only downloads and compiles the module it renders instead of all ten; each
+ * chunk's loading fallback is the very skeleton that route already painted.
+ */
+function lazyScreen(module, load) {
+  return dynamic(load, { loading: () => <ModuleSkeletonFor module={module} /> });
 }
 
-function BoardFallback() {
-  return <ModuleSkeleton cards={0} board />;
-}
+const SCREENS = {
+  overview: lazyScreen("overview", () =>
+    import("@/components/project-modules/OverviewScreen"),
+  ),
+  leads: lazyScreen("leads", () => import("@/components/project-modules/LeadsScreen")),
+  campaigns: lazyScreen("campaigns", () =>
+    import("@/components/project-modules/CampaignsScreen"),
+  ),
+  calendar: lazyScreen("calendar", () =>
+    import("@/components/project-modules/CalendarScreen"),
+  ),
+  tasks: lazyScreen("tasks", () => import("@/components/project-modules/TasksScreen")),
+  team: lazyScreen("team", () =>
+    import("@/components/project-modules/ProjectTeamScreen"),
+  ),
+  approvals: lazyScreen("approvals", () =>
+    import("@/components/project-modules/ApprovalWorkbench"),
+  ),
+  reports: lazyScreen("reports", () =>
+    import("@/components/project-modules/ReportsScreen"),
+  ),
+  "client-view": lazyScreen("client-view", () =>
+    import("@/components/project-modules/ClientViewScreen"),
+  ),
+  "project-settings": lazyScreen("project-settings", () =>
+    import("@/components/project-modules/ProjectSettingsScreen"),
+  ),
+};
 
-// Each screen is its own chunk, so a route only ever downloads and compiles the
-// module it renders instead of all ten (recharts included).
-const ApprovalWorkbench = dynamic(
-  () => import("@/components/project-modules/ApprovalWorkbench"),
-  { loading: CardsFallback },
-);
-const CalendarScreen = dynamic(
-  () => import("@/components/project-modules/CalendarScreen"),
-  { loading: CardsFallback },
-);
-const CampaignsScreen = dynamic(
-  () => import("@/components/project-modules/CampaignsScreen"),
-  { loading: CardsFallback },
-);
-const ClientViewScreen = dynamic(
-  () => import("@/components/project-modules/ClientViewScreen"),
-  { loading: CardsFallback },
-);
-const LeadsScreen = dynamic(
-  () => import("@/components/project-modules/LeadsScreen"),
-  { loading: CardsFallback },
-);
-const OverviewScreen = dynamic(
-  () => import("@/components/project-modules/OverviewScreen"),
-  { loading: CardsFallback },
-);
-const ProjectSettingsScreen = dynamic(
-  () => import("@/components/project-modules/ProjectSettingsScreen"),
-  { loading: CardsFallback },
-);
-const ProjectTeamScreen = dynamic(
-  () => import("@/components/project-modules/ProjectTeamScreen"),
-  { loading: CardsFallback },
-);
-const ReportsScreen = dynamic(
-  () => import("@/components/project-modules/ReportsScreen"),
-  { loading: CardsFallback },
-);
-const TasksScreen = dynamic(
-  () => import("@/components/project-modules/TasksScreen"),
-  { loading: BoardFallback },
-);
+/**
+ * Maps each module's screen onto the data it needs. Keeping these as small pure
+ * functions is what lets the component below stay a handful of lines.
+ */
+const PROPS = {
+  overview: ({ bundle, overview }) => ({
+    bundle,
+    recentActivity: overview.recentActivity,
+    store: { teamMembers: overview.teamMembers },
+  }),
+  leads: ({ project, leads }) => ({
+    project,
+    leads: leads.leads,
+    summary: leads.summary,
+    filterOptions: leads.filters,
+    teamMembers: leads.teamMembers,
+    selectedLead: leads.selectedLead,
+    isLeadDetailLoading: leads.isLeadDetailLoading,
+    isListLoading: leads.isListLoading,
+    onStatusChange: leads.updateLeadStatus,
+    onCreateLead: leads.createLead,
+    onDeleteLead: leads.deleteLead,
+    onNote: leads.addLeadNote,
+    onOpenLead: leads.openLead,
+    onCloseLead: leads.closeLead,
+    query: leads.query,
+    setQuery: leads.setQuery,
+    statusFilter: leads.statusFilter,
+    setStatusFilter: leads.setStatusFilter,
+    sourceFilter: leads.sourceFilter,
+    setSourceFilter: leads.setSourceFilter,
+    assigneeFilter: leads.assigneeFilter,
+    setAssigneeFilter: leads.setAssigneeFilter,
+  }),
+  campaigns: ({ bundle, module }) => ({
+    bundle,
+    onCreateCampaign: module.createCampaign,
+    onUpdateCampaign: module.updateCampaign,
+    onDeleteCampaign: module.deleteCampaign,
+  }),
+  calendar: ({ bundle, module }) => ({
+    bundle,
+    store: module.store,
+    onCreateEvent: module.createCalendarEvent,
+    onUpdateEvent: module.updateCalendarEvent,
+    onDeleteEvent: module.deleteCalendarEvent,
+  }),
+  tasks: ({ bundle, module }) => ({
+    bundle,
+    store: module.store,
+    onMoveTask: module.updateTaskColumn,
+    onCreateTask: module.createTask,
+    onUpdateTask: module.updateTask,
+    onDeleteTask: module.deleteTask,
+  }),
+  team: ({ bundle, module, projectId }) => ({
+    bundle,
+    store: module.store,
+    onToggleAssignment: (memberId, options) =>
+      module.toggleTeamMemberAssignment(projectId, memberId, options),
+  }),
+  approvals: ({ bundle, module }) => ({
+    bundle,
+    store: module.store,
+    onStatusChange: module.updateApprovalStatus,
+    onComment: module.addApprovalComment,
+    onCreateApproval: module.createApproval,
+    onDeleteApproval: module.deleteApproval,
+  }),
+  reports: ({ bundle, module }) => ({
+    bundle,
+    onUpdateReport: module.updateReportConfig,
+  }),
+  "client-view": ({ bundle }) => ({ bundle }),
+  "project-settings": ({ bundle, module }) => ({
+    bundle,
+    store: module.store,
+    onUpdateProject: module.updateProject,
+  }),
+};
 
 export default function ProjectModulePage({ projectId, module }) {
   const isOverview = module === "overview";
   const isLeads = module === "leads";
 
-  const overviewData = useProjectOverviewData(projectId, isOverview);
-  const leadsData = useProjectLeadsData(projectId, isLeads);
+  const overview = useProjectOverviewData(projectId, isOverview);
+  const leads = useProjectLeadsData(projectId, isLeads);
   const moduleData = useProjectModuleData(projectId, module);
 
   const bundle = isOverview
-    ? overviewData.bundle
+    ? overview.bundle
     : isLeads
       ? null
       : moduleData.selectors.getProjectBundle(projectId);
 
-  const effectiveProject = isOverview
-    ? overviewData.bundle?.project || null
+  const project = isOverview
+    ? overview.bundle?.project || null
     : isLeads
-      ? leadsData.project
+      ? leads.project
       : bundle?.project || null;
 
   // Only this module's own request gates the content area — the shell resolves
   // its own data independently and never blocks the module.
   const isLoading = isOverview
-    ? overviewData.isLoading
+    ? overview.isLoading
     : isLeads
-      ? leadsData.isSummaryLoading
+      ? leads.isSummaryLoading
       : moduleData.isLoading;
 
-  if (isLoading || !effectiveProject) {
-    if (!isLoading && !effectiveProject) {
-      return (
-        <EmptyState
-          title="Project not found."
-          description="Return to the Projects Hub and choose an existing project."
-          action={
-            <Link
-              href="/projects"
-              className="mt-6 inline-flex rounded-[14px] bg-ledger-blue px-4 py-2 text-sm font-semibold text-white"
-            >
-              Back to Projects
-            </Link>
-          }
-        />
-      );
-    }
-
-    return module === "tasks" ? <BoardFallback /> : <CardsFallback />;
+  if (isLoading) {
+    return <ModuleSkeletonFor module={module} />;
   }
 
-  switch (module) {
-    case "overview":
-      return (
-        <OverviewScreen
-          bundle={bundle}
-          recentActivity={overviewData.recentActivity}
-          store={{ teamMembers: overviewData.teamMembers }}
-        />
-      );
-    case "leads":
-      return (
-        <LeadsScreen
-          project={effectiveProject}
-          leads={leadsData.leads}
-          summary={leadsData.summary}
-          filterOptions={leadsData.filters}
-          onStatusChange={leadsData.updateLeadStatus}
-          onCreateLead={leadsData.createLead}
-          onDeleteLead={leadsData.deleteLead}
-          onNote={leadsData.addLeadNote}
-          onOpenLead={leadsData.openLead}
-          onCloseLead={leadsData.closeLead}
-          selectedLead={leadsData.selectedLead}
-          isLeadDetailLoading={leadsData.isLeadDetailLoading}
-          isListLoading={leadsData.isListLoading}
-          teamMembers={leadsData.teamMembers}
-          query={leadsData.query}
-          setQuery={leadsData.setQuery}
-          statusFilter={leadsData.statusFilter}
-          setStatusFilter={leadsData.setStatusFilter}
-          sourceFilter={leadsData.sourceFilter}
-          setSourceFilter={leadsData.setSourceFilter}
-          assigneeFilter={leadsData.assigneeFilter}
-          setAssigneeFilter={leadsData.setAssigneeFilter}
-        />
-      );
-    case "campaigns":
-      return (
-        <CampaignsScreen
-          bundle={bundle}
-          onCreateCampaign={moduleData.createCampaign}
-          onUpdateCampaign={moduleData.updateCampaign}
-          onDeleteCampaign={moduleData.deleteCampaign}
-        />
-      );
-    case "calendar":
-      return (
-        <CalendarScreen
-          bundle={bundle}
-          onCreateEvent={moduleData.createCalendarEvent}
-          onUpdateEvent={moduleData.updateCalendarEvent}
-          onDeleteEvent={moduleData.deleteCalendarEvent}
-          store={moduleData.store}
-        />
-      );
-    case "tasks":
-      return (
-        <TasksScreen
-          bundle={bundle}
-          onMoveTask={moduleData.updateTaskColumn}
-          onCreateTask={moduleData.createTask}
-          onUpdateTask={moduleData.updateTask}
-          onDeleteTask={moduleData.deleteTask}
-          store={moduleData.store}
-        />
-      );
-    case "approvals":
-      return (
-        <ApprovalWorkbench
-          bundle={bundle}
-          onStatusChange={moduleData.updateApprovalStatus}
-          onComment={moduleData.addApprovalComment}
-          onCreateApproval={moduleData.createApproval}
-          onDeleteApproval={moduleData.deleteApproval}
-          store={moduleData.store}
-        />
-      );
-    case "team":
-      return (
-        <ProjectTeamScreen
-          bundle={bundle}
-          store={moduleData.store}
-          onToggleAssignment={(memberId, options) =>
-            moduleData.toggleTeamMemberAssignment(projectId, memberId, options)
-          }
-        />
-      );
-    case "reports":
-      return (
-        <ReportsScreen bundle={bundle} onUpdateReport={moduleData.updateReportConfig} />
-      );
-    case "client-view":
-      return <ClientViewScreen bundle={bundle} />;
-    case "project-settings":
-      return (
-        <ProjectSettingsScreen
-          bundle={bundle}
-          store={moduleData.store}
-          onUpdateProject={moduleData.updateProject}
-        />
-      );
-    default:
-      return <CardsFallback />;
+  if (!project) {
+    return (
+      <EmptyState
+        title="Project not found."
+        description="Return to the Projects Hub and choose an existing project."
+        action={
+          <Link href="/projects" className="btn btn-primary">
+            Back to projects
+          </Link>
+        }
+      />
+    );
   }
+
+  const Screen = SCREENS[module] || SCREENS.leads;
+  const buildProps = PROPS[module] || PROPS.leads;
+
+  return (
+    <Screen {...buildProps({ bundle, project, overview, leads, module: moduleData, projectId })} />
+  );
 }

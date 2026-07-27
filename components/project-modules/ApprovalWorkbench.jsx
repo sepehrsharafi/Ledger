@@ -1,45 +1,36 @@
 "use client";
 
 import { useState } from "react";
-import Badge from "@/components/Badge";
-import Drawer from "@/components/Drawer";
 import EmptyState from "@/components/EmptyState";
 import Modal from "@/components/Modal";
-import { cn, formatDate } from "@/lib/utils";
-import { panelClassName } from "@/components/project-modules/shared";
+import { Avatar, Chip, Frame, Pill, Section } from "@/components/ui";
+import ApprovalComposer from "@/components/project-modules/ApprovalComposer";
+import { usePageAction } from "@/context/PageAction";
+import { formatDate } from "@/lib/utils";
 
-function ApprovalPreview({ type = "Creative" }) {
+const DECISIONS = ["Approved", "Pending", "Rejected"];
+
+/** Placeholder for the asset itself — the demo has no uploaded media. */
+function AssetPreview({ className = "h-[190px]" }) {
   return (
-    <div className="flex h-40 items-center justify-center rounded-[18px] border border-[#E4EBF7] bg-[#FCFDFF] text-[#C0CDE3]">
-      <div className="flex h-24 w-24 items-center justify-center">
-        <svg
-          viewBox="0 0 24 24"
-          className="h-20 w-20"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.4"
-        >
-          {type === "Video" ? (
-            <>
-              <rect x="4" y="6" width="16" height="12" rx="2.5" />
-              <path d="m10 10 5 2-5 2Z" fill="currentColor" stroke="none" />
-            </>
-          ) : type === "Copy" ? (
-            <>
-              <path d="M7 6.5h10M7 10.5h10M7 14.5h6" strokeLinecap="round" />
-              <rect x="5" y="4.5" width="14" height="15" rx="2.5" />
-            </>
-          ) : (
-            <>
-              <rect x="5" y="5" width="14" height="14" rx="3" />
-              <circle cx="10" cy="10" r="1.6" fill="currentColor" stroke="none" />
-              <path d="m7.5 16 3.2-3.2 2.1 2.1 3.7-4.1" strokeLinecap="round" strokeLinejoin="round" />
-            </>
-          )}
-        </svg>
-      </div>
+    <div className={`flex items-center justify-center bg-shade text-faint ${className}`}>
+      <svg viewBox="0 0 24 24" className="h-8 w-8 fill-none stroke-current stroke-[1.2]">
+        <rect x="3.5" y="5.5" width="17" height="13" />
+        <circle cx="9" cy="10" r="1.4" />
+        <path d="m5.5 17 4.5-4.5 3 3 3.5-4 2 2.5" strokeLinejoin="round" />
+      </svg>
     </div>
   );
+}
+
+function approvalMeta(approval) {
+  return [
+    approval.submittedBy,
+    formatDate(approval.submittedDate),
+    [approval.type, approval.requestType].filter(Boolean).join(" / "),
+  ]
+    .filter(Boolean)
+    .join(" · ");
 }
 
 export default function ApprovalWorkbench({
@@ -50,393 +41,210 @@ export default function ApprovalWorkbench({
   onDeleteApproval,
   store,
 }) {
-  const [selectedApproval, setSelectedApproval] = useState(null);
-  const [activeCommentId, setActiveCommentId] = useState("");
-  const [draft, setDraft] = useState("");
+  const [selected, setSelected] = useState(null);
+  const [comment, setComment] = useState("");
   const [isSavingComment, setIsSavingComment] = useState(false);
   const [composerOpen, setComposerOpen] = useState(false);
-  const [approvalDraft, setApprovalDraft] = useState({
-    title: "",
-    requestType: "Creative",
-    submittedBy: store.teamMembers[0]?.name || "Alex Morgan",
-    summary: "",
-    details: "",
-    pros: "",
-    cons: "",
-    recommendation: "",
-    status: "Pending",
-    thumbnailColor: "#CBD5E1",
-    attachments: "Brief, mockup, and context note",
-  });
 
-  const resetComposer = () =>
-    setApprovalDraft({
-      title: "",
-      requestType: "Creative",
-      submittedBy: store.teamMembers[0]?.name || "Alex Morgan",
-      summary: "",
-      details: "",
-      pros: "",
-      cons: "",
-      recommendation: "",
-      status: "Pending",
-      thumbnailColor: "#CBD5E1",
-      attachments: "Brief, mockup, and context note",
-    });
+  usePageAction(() => setComposerOpen(true));
 
-  async function handleCommentSave(approvalId) {
-    if (!draft.trim() || isSavingComment) {
+  const approvals = bundle.approvals || [];
+
+  function setDecision(approval, status) {
+    onStatusChange(approval.id, status);
+    setSelected((current) => (current ? { ...current, status } : current));
+  }
+
+  async function saveComment() {
+    if (!comment.trim() || isSavingComment) {
       return;
     }
+
     setIsSavingComment(true);
     try {
-      await onComment(approvalId, draft);
-      setDraft("");
-      setActiveCommentId("");
+      await onComment(selected.id, comment);
+      setComment("");
     } finally {
       setIsSavingComment(false);
     }
   }
 
-  if (!bundle.approvals.length) {
+  const composer = (
+    <ApprovalComposer
+      open={composerOpen}
+      onClose={() => setComposerOpen(false)}
+      onCreate={onCreateApproval}
+      projectId={bundle.project.id}
+      teamMembers={store.teamMembers}
+    />
+  );
+
+  if (!approvals.length) {
     return (
       <>
         <EmptyState
           title="No assets waiting for review."
-          description="When new local review items exist for this project, they will appear here."
+          description="Review requests for this project will appear here."
           action={
             <button
+              type="button"
               onClick={() => setComposerOpen(true)}
-              className="ledger-button ledger-button-primary mt-6 px-4"
+              className="btn btn-primary"
             >
-              Request Approval
+              Request approval
             </button>
           }
         />
-        <Drawer
-          open={composerOpen}
-          onClose={() => setComposerOpen(false)}
-          title="Request Approval"
-        >
-          <div className="grid gap-4 sm:grid-cols-2" />
-        </Drawer>
+        {composer}
       </>
     );
   }
 
   return (
     <>
-      <div className="mb-5 flex justify-end">
-        <button
-          onClick={() => setComposerOpen(true)}
-          className="ledger-button ledger-button-primary w-full sm:w-auto"
-        >
-          Request Approval
-        </button>
-      </div>
-      <div className="grid gap-5 xl:grid-cols-3">
-        {bundle.approvals.map((approval) => (
-          <button
-            key={approval.id}
-            onClick={() => setSelectedApproval({ ...approval })}
-            className={cn(
-              panelClassName,
-              "p-5 text-left transition hover:-translate-y-0.5 hover:shadow-[0_18px_32px_rgba(15,23,42,0.08)]",
-            )}
-          >
-            <ApprovalPreview type={approval.requestType || approval.type} />
-            <div className="mt-5 flex items-center justify-between gap-3">
-              <div>
-                <div className="text-lg font-semibold tracking-[-0.02em] text-ledger-ink">
-                  {approval.title}
-                </div>
-                <div className="mt-1 text-sm text-slate-500">
-                  {approval.submittedBy} · {formatDate(approval.submittedDate)}
-                </div>
+      <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+        {approvals.map((approval) => (
+          <Frame key={approval.id} marks className="flex flex-col">
+            <AssetPreview />
+            <div className="flex flex-1 flex-col border-t border-line p-5">
+              <div className="flex items-start justify-between gap-3">
+                <h2 className="display min-w-0 text-[18px] text-ink">{approval.title}</h2>
+                <Pill tone={approval.status}>{approval.status}</Pill>
               </div>
-              <Badge tone={approval.status}>{approval.status}</Badge>
+              <div className="label mt-2">{approvalMeta(approval)}</div>
+              <p className="mt-3.5 text-[12.5px] leading-5 text-muted">
+                {approval.summary || approval.details}
+              </p>
+              <div className="mt-5 flex flex-wrap gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setDecision(approval, "Approved")}
+                  className="btn btn-primary"
+                >
+                  Approve
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelected({ ...approval })}
+                  className="btn btn-ghost"
+                >
+                  Request changes
+                </button>
+              </div>
             </div>
-            <div className="mt-4 flex items-center gap-2">
-              <Badge tone={approval.type}>{approval.type}</Badge>
-              {approval.requestType ? <Badge>{approval.requestType}</Badge> : null}
-            </div>
-            <p className="mt-4 text-sm leading-6 text-slate-500">
-              {approval.summary || approval.details || "Open to review the full request details."}
-            </p>
-          </button>
+          </Frame>
         ))}
       </div>
 
       <Modal
-        open={Boolean(selectedApproval)}
-        onClose={() => setSelectedApproval(null)}
-        title={selectedApproval?.title || "Approval"}
+        open={Boolean(selected)}
+        onClose={() => setSelected(null)}
+        eyebrow="Approval request"
+        title={selected?.title || "Approval"}
       >
-        {selectedApproval ? (
-          <div className="space-y-5">
-            <ApprovalPreview type={selectedApproval.requestType || selectedApproval.type} />
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <div className="text-sm uppercase tracking-[0.18em] text-[#8FA0BE]">
-                  Approval request
-                </div>
-                <div className="mt-2 text-2xl font-bold tracking-[-0.03em] text-ledger-ink">
-                  {selectedApproval.title}
-                </div>
-                <div className="mt-2 text-sm text-slate-500">
-                  {selectedApproval.submittedBy} · {formatDate(selectedApproval.submittedDate)}
-                </div>
-              </div>
-              <Badge tone={selectedApproval.status}>{selectedApproval.status}</Badge>
+        {selected ? (
+          <div className="space-y-7">
+            <div className="-mt-2 flex items-start justify-between gap-4">
+              <div className="label">{approvalMeta(selected)}</div>
+              <Pill tone={selected.status}>{selected.status}</Pill>
             </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              {[
-                ["Type", selectedApproval.type],
-                ["Requested by", selectedApproval.submittedBy],
-                ["Request focus", selectedApproval.requestType || "General"],
-                ["Attachments", selectedApproval.attachments || "None"],
-              ].map(([label, value]) => (
-                <div key={label} className="rounded-[16px] bg-slate-50 p-4">
-                  <div className="text-xs uppercase tracking-[0.16em] text-slate-400">
-                    {label}
-                  </div>
-                  <div className="mt-2 text-sm font-semibold text-ledger-ink">{value}</div>
-                </div>
-              ))}
-            </div>
-            <div className="rounded-[18px] border border-ledger-border p-5">
-              <div className="text-sm font-semibold uppercase tracking-[0.12em] text-[#8FA0BE]">
-                Summary
-              </div>
-              <p className="mt-3 text-sm leading-6 text-slate-600">
-                {selectedApproval.summary || selectedApproval.details}
-              </p>
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="rounded-[18px] border border-ledger-border p-5">
-                <div className="text-sm font-semibold uppercase tracking-[0.12em] text-[#8FA0BE]">
-                  Pros
-                </div>
-                <p className="mt-3 text-sm leading-6 text-slate-600">
-                  {selectedApproval.pros || "Not specified."}
+
+            <AssetPreview className="h-[220px] border border-line" />
+
+            <p className="text-[13.5px] leading-6 text-ink-soft">
+              {selected.details || selected.summary}
+            </p>
+
+            <div className="grid gap-7 sm:grid-cols-2">
+              <Section title="For" bodyClassName="pt-3">
+                <p className="text-[12.5px] leading-5 text-muted">
+                  {selected.pros || "Not specified."}
                 </p>
-              </div>
-              <div className="rounded-[18px] border border-ledger-border p-5">
-                <div className="text-sm font-semibold uppercase tracking-[0.12em] text-[#8FA0BE]">
-                  Cons
-                </div>
-                <p className="mt-3 text-sm leading-6 text-slate-600">
-                  {selectedApproval.cons || "Not specified."}
+              </Section>
+              <Section title="Against" bodyClassName="pt-3">
+                <p className="text-[12.5px] leading-5 text-muted">
+                  {selected.cons || "Not specified."}
                 </p>
-              </div>
+              </Section>
             </div>
-            <div className="rounded-[18px] border border-ledger-border p-5">
-              <div className="text-sm font-semibold uppercase tracking-[0.12em] text-[#8FA0BE]">
-                Recommendation
-              </div>
-              <p className="mt-3 text-sm leading-6 text-slate-600">
-                {selectedApproval.recommendation || "No recommendation added yet."}
+
+            <Section title="Recommendation" bodyClassName="pt-3">
+              <p className="text-[12.5px] leading-5 text-muted">
+                {selected.recommendation || "No recommendation added yet."}
               </p>
-            </div>
-            <div>
-              <div className="text-sm font-bold uppercase tracking-[0.12em] text-[#8FA0BE]">
-                Decision
-              </div>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {["Approved", "Pending", "Rejected"].map((item) => (
-                  <button
+            </Section>
+
+            <Section title="Attachments" bodyClassName="pt-3">
+              <p className="text-[12.5px] text-accent">{selected.attachments || "None"}</p>
+            </Section>
+
+            <Section title="Decision" bodyClassName="pt-3">
+              <div className="flex flex-wrap gap-1.5">
+                {DECISIONS.map((item) => (
+                  <Chip
                     key={item}
-                    onClick={() => {
-                      onStatusChange(selectedApproval.id, item);
-                      setSelectedApproval((current) =>
-                        current ? { ...current, status: item } : current,
-                      );
-                    }}
-                    className={cn(
-                      "rounded-full border px-4 py-2 text-sm font-semibold transition",
-                      selectedApproval.status === item
-                        ? "border-ledger-blue bg-[#EEF4FF] text-ledger-blue"
-                        : "border-[#E3EBF7] bg-white text-slate-500 hover:border-[#C9D8F2]",
-                    )}
+                    active={selected.status === item}
+                    onClick={() => setDecision(selected, item)}
                   >
                     {item}
-                  </button>
+                  </Chip>
                 ))}
               </div>
-            </div>
-            <div>
-              <div className="text-sm font-bold uppercase tracking-[0.12em] text-[#8FA0BE]">
-                Review comments
-              </div>
-              <div className="mt-4 space-y-3">
-                {selectedApproval.comments.map((comment) => (
-                  <div key={comment.id} className="rounded-[16px] bg-slate-50 p-3">
-                    <div className="text-sm font-medium text-ledger-ink">{comment.author}</div>
-                    <div className="mt-1 text-sm text-slate-500">{comment.message}</div>
+            </Section>
+
+            <Section title="Comments">
+              {(selected.comments || []).map((entry) => (
+                <div key={entry.id} className="flex gap-3 border-b border-line-soft py-3">
+                  <Avatar
+                    name={entry.author}
+                    color={
+                      store.teamMembers.find((member) => member.name === entry.author)
+                        ?.avatarColor
+                    }
+                    className="mt-px h-[22px] w-[22px]"
+                  />
+                  <div className="min-w-0">
+                    <div className="text-[13px] font-semibold text-ink">{entry.author}</div>
+                    <p className="mt-1 text-[12.5px] leading-5 text-muted">
+                      {entry.message}
+                    </p>
                   </div>
-                ))}
-              </div>
+                </div>
+              ))}
               <textarea
-                value={activeCommentId === selectedApproval.id ? draft : ""}
-                onFocus={() => setActiveCommentId(selectedApproval.id)}
-                onChange={(event) => {
-                  setActiveCommentId(selectedApproval.id);
-                  setDraft(event.target.value);
-                }}
+                value={comment}
+                onChange={(event) => setComment(event.target.value)}
                 rows={3}
-                placeholder="Add a comment..."
-                className="ledger-textarea mt-4"
+                placeholder="Add a comment…"
+                className="field-area mt-4"
                 disabled={isSavingComment}
               />
-              <button
-                onClick={() => handleCommentSave(selectedApproval.id)}
-                disabled={!draft.trim() || isSavingComment}
-                className="ledger-button ledger-button-primary mt-3 h-10 px-4 text-sm disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {isSavingComment ? "Saving..." : "Add Comment"}
-              </button>
-            </div>
-            <div className="flex justify-end border-t border-[#E6EDF8] pt-4">
-              <button
-                onClick={async () => {
-                  await onDeleteApproval(selectedApproval.id);
-                  setSelectedApproval(null);
-                }}
-                className="rounded-[14px] border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-100"
-              >
-                Delete Request
-              </button>
-            </div>
+              <div className="mt-3 flex items-center justify-between gap-3">
+                <button
+                  type="button"
+                  onClick={saveComment}
+                  disabled={!comment.trim() || isSavingComment}
+                  className="btn btn-primary"
+                >
+                  {isSavingComment ? "Saving…" : "Add comment"}
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await onDeleteApproval(selected.id);
+                    setSelected(null);
+                  }}
+                  className="btn btn-danger"
+                >
+                  Delete request
+                </button>
+              </div>
+            </Section>
           </div>
         ) : null}
       </Modal>
 
-      <Drawer
-        open={composerOpen}
-        onClose={() => {
-          setComposerOpen(false);
-          resetComposer();
-        }}
-        title="Request Approval"
-      >
-        <div className="grid gap-4 sm:grid-cols-2">
-          <label className="text-sm font-medium text-ledger-ink sm:col-span-2">
-            <span className="mb-2 block">Title</span>
-            <input
-              value={approvalDraft.title}
-              onChange={(event) =>
-                setApprovalDraft((current) => ({ ...current, title: event.target.value }))
-              }
-              className="ledger-input"
-            />
-          </label>
-          <label className="text-sm font-medium text-ledger-ink">
-            <span className="mb-2 block">Type</span>
-            <select
-              value={approvalDraft.requestType}
-              onChange={(event) =>
-                setApprovalDraft((current) => ({
-                  ...current,
-                  requestType: event.target.value,
-                }))
-              }
-              className="ledger-select"
-            >
-              {["Creative", "Copy", "Budget", "Strategy", "Video"].map((item) => (
-                <option key={item}>{item}</option>
-              ))}
-            </select>
-          </label>
-          <label className="text-sm font-medium text-ledger-ink">
-            <span className="mb-2 block">Submitted by</span>
-            <select
-              value={approvalDraft.submittedBy}
-              onChange={(event) =>
-                setApprovalDraft((current) => ({
-                  ...current,
-                  submittedBy: event.target.value,
-                }))
-              }
-              className="ledger-select"
-            >
-              {store.teamMembers.map((member) => (
-                <option key={member.id}>{member.name}</option>
-              ))}
-            </select>
-          </label>
-          <label className="text-sm font-medium text-ledger-ink sm:col-span-2">
-            <span className="mb-2 block">Summary</span>
-            <textarea
-              value={approvalDraft.summary}
-              onChange={(event) =>
-                setApprovalDraft((current) => ({ ...current, summary: event.target.value }))
-              }
-              rows={3}
-              className="ledger-textarea"
-            />
-          </label>
-          <label className="text-sm font-medium text-ledger-ink sm:col-span-2">
-            <span className="mb-2 block">Details</span>
-            <textarea
-              value={approvalDraft.details}
-              onChange={(event) =>
-                setApprovalDraft((current) => ({ ...current, details: event.target.value }))
-              }
-              rows={5}
-              className="ledger-textarea"
-            />
-          </label>
-          <label className="text-sm font-medium text-ledger-ink">
-            <span className="mb-2 block">Pros</span>
-            <input
-              value={approvalDraft.pros}
-              onChange={(event) =>
-                setApprovalDraft((current) => ({ ...current, pros: event.target.value }))
-              }
-              className="ledger-input"
-            />
-          </label>
-          <label className="text-sm font-medium text-ledger-ink">
-            <span className="mb-2 block">Cons</span>
-            <input
-              value={approvalDraft.cons}
-              onChange={(event) =>
-                setApprovalDraft((current) => ({ ...current, cons: event.target.value }))
-              }
-              className="ledger-input"
-            />
-          </label>
-          <label className="text-sm font-medium text-ledger-ink sm:col-span-2">
-            <span className="mb-2 block">Recommendation</span>
-            <textarea
-              value={approvalDraft.recommendation}
-              onChange={(event) =>
-                setApprovalDraft((current) => ({
-                  ...current,
-                  recommendation: event.target.value,
-                }))
-              }
-              rows={3}
-              className="ledger-textarea"
-            />
-          </label>
-        </div>
-        <div className="mt-5 flex justify-end">
-          <button
-            onClick={() => {
-              if (!approvalDraft.title.trim() || !approvalDraft.details.trim()) {
-                return;
-              }
-              onCreateApproval(bundle.project.id, approvalDraft);
-              setComposerOpen(false);
-              resetComposer();
-            }}
-            className="ledger-button ledger-button-primary min-w-[160px]"
-          >
-            Save Request
-          </button>
-        </div>
-      </Drawer>
+      {composer}
     </>
   );
 }
