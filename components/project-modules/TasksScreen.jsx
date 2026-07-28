@@ -9,6 +9,7 @@ import {
 } from "@/components/project-modules/TaskDrawers";
 import { isOverdueDate, taskColumns } from "@/components/project-modules/shared";
 import { usePageAction } from "@/context/PageAction";
+import { useBoardDrag } from "@/lib/useBoardDrag";
 import { cn, formatDate } from "@/lib/utils";
 
 function initials(name = "") {
@@ -21,16 +22,14 @@ function initials(name = "") {
     .toUpperCase();
 }
 
-function TaskCard({ task, dragging, onOpen, onDragStart, onDragEnd }) {
+function TaskCard({ task, dragging, onOpen, dragProps }) {
   const overdue = isOverdueDate(task.dueDate, task.column === "Done");
 
   return (
     <div
-      draggable
       role="button"
       tabIndex={0}
-      onDragStart={onDragStart}
-      onDragEnd={onDragEnd}
+      {...dragProps}
       onClick={onOpen}
       onKeyDown={(event) => {
         if (event.key === "Enter" || event.key === " ") {
@@ -39,8 +38,8 @@ function TaskCard({ task, dragging, onOpen, onDragStart, onDragEnd }) {
         }
       }}
       className={cn(
-        "cursor-pointer border border-line bg-white p-3 transition-colors hover:border-ink",
-        dragging ? "opacity-50" : "",
+        "cursor-grab border border-line bg-white p-3 transition-colors hover:border-ink",
+        dragging ? "opacity-40" : "",
       )}
     >
       <div className="flex items-start justify-between gap-2.5">
@@ -75,7 +74,7 @@ export default function TasksScreen({
   onDeleteTask,
   store,
 }) {
-  const [draggedId, setDraggedId] = useState(null);
+  const drag = useBoardDrag({ onDrop: onMoveTask });
   const [assigneeFilter, setAssigneeFilter] = useState("All");
   const [selectedTask, setSelectedTask] = useState(null);
   const [composerOpen, setComposerOpen] = useState(false);
@@ -119,7 +118,13 @@ export default function TasksScreen({
           ))}
         </div>
 
-        <div className="thin-scroll -mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
+        <div
+          ref={drag.scrollerRef}
+          className={cn(
+            "thin-scroll -mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0",
+            drag.isDragging ? "touch-none select-none" : "",
+          )}
+        >
           <Frame
             className="grid-hairline min-w-[820px]"
             style={{ gridTemplateColumns: `repeat(${taskColumns.length}, minmax(0, 1fr))` }}
@@ -130,20 +135,11 @@ export default function TasksScreen({
               return (
                 <div
                   key={column}
-                  onDragOver={(event) => {
-                    event.preventDefault();
-                    event.dataTransfer.dropEffect = "move";
-                  }}
-                  onDrop={(event) => {
-                    event.preventDefault();
-                    const taskId =
-                      event.dataTransfer.getData("text/task-id") || draggedId;
-                    if (taskId) {
-                      onMoveTask(taskId, column);
-                    }
-                    setDraggedId(null);
-                  }}
-                  className="min-w-0 p-3.5"
+                  ref={(node) => drag.registerColumn(column, node)}
+                  className={cn(
+                    "min-w-0 p-3.5 transition-colors",
+                    drag.isDragging && drag.overColumn === column ? "bg-shade" : "",
+                  )}
                 >
                   <div className="flex items-baseline justify-between gap-2 border-b border-edge pb-2">
                     <span className="label label-ink font-semibold">{column}</span>
@@ -156,14 +152,13 @@ export default function TasksScreen({
                       <TaskCard
                         key={task.id}
                         task={task}
-                        dragging={draggedId === task.id}
-                        onOpen={() => setSelectedTask({ ...task })}
-                        onDragStart={(event) => {
-                          setDraggedId(task.id);
-                          event.dataTransfer.setData("text/task-id", task.id);
-                          event.dataTransfer.effectAllowed = "move";
+                        dragging={drag.draggingId === task.id}
+                        dragProps={drag.dragHandleProps(task.id)}
+                        onOpen={() => {
+                          if (!drag.isDragging) {
+                            setSelectedTask({ ...task });
+                          }
                         }}
-                        onDragEnd={() => setDraggedId(null)}
                       />
                     ))}
                   </div>
@@ -179,8 +174,10 @@ export default function TasksScreen({
         teamMembers={store.teamMembers}
         onChange={(patch) => setSelectedTask((current) => ({ ...current, ...patch }))}
         onClose={() => setSelectedTask(null)}
-        onSave={() => {
-          onUpdateTask(selectedTask.id, selectedTask);
+        // Awaited so the drawer stays open, and its button stays busy, until the
+        // write has landed. Closing first would hide the pending state entirely.
+        onSave={async () => {
+          await onUpdateTask(selectedTask.id, selectedTask);
           setSelectedTask(null);
         }}
         onDelete={async () => {

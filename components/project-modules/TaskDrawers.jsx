@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import Drawer from "@/components/Drawer";
-import { AssigneeSelect, Field } from "@/components/ui";
+import { AssigneeSelect, Field, Spinner } from "@/components/ui";
+import { usePendingAction } from "@/lib/usePendingAction";
 import {
   inputDateValue,
   taskColumns,
@@ -70,6 +71,9 @@ function TaskFields({ value, onChange, teamMembers }) {
 }
 
 export function TaskDetailDrawer({ task, onChange, onClose, onSave, onDelete, teamMembers }) {
+  const action = usePendingAction();
+  const busy = action.isPending;
+
   if (!task) {
     return <Drawer open={false} onClose={onClose} eyebrow="Task" />;
   }
@@ -79,16 +83,23 @@ export function TaskDetailDrawer({ task, onChange, onClose, onSave, onDelete, te
       <div className="space-y-5">
         <TaskFields value={task} onChange={onChange} teamMembers={teamMembers} />
         <div className="flex items-center justify-between gap-3">
-          <button type="button" onClick={onDelete} className="btn btn-danger">
-            Delete
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => action.run("delete", onDelete)}
+            className="btn btn-danger inline-flex items-center gap-1.5"
+          >
+            {action.pendingKey === "delete" ? <Spinner /> : null}
+            {action.pendingKey === "delete" ? "Deleting…" : "Delete"}
           </button>
           <button
             type="button"
-            disabled={!String(task.title).trim()}
-            onClick={onSave}
-            className="btn btn-primary"
+            disabled={busy || !String(task.title).trim()}
+            onClick={() => action.run("save", onSave)}
+            className="btn btn-primary inline-flex items-center gap-1.5"
           >
-            Save task
+            {action.pendingKey === "save" ? <Spinner /> : null}
+            {action.pendingKey === "save" ? "Saving…" : "Save task"}
           </button>
         </div>
       </div>
@@ -97,6 +108,7 @@ export function TaskDetailDrawer({ task, onChange, onClose, onSave, onDelete, te
 }
 
 export function TaskComposerDrawer({ open, onClose, onCreate, projectId, teamMembers }) {
+  const action = usePendingAction();
   const [draft, setDraft] = useState(() => emptyDraft(teamMembers));
   const isValid = draft.title.trim() && draft.dueDate;
 
@@ -115,14 +127,17 @@ export function TaskComposerDrawer({ open, onClose, onCreate, projectId, teamMem
         />
         <button
           type="button"
-          disabled={!isValid}
-          onClick={() => {
-            onCreate(projectId, draft);
-            close();
-          }}
-          className="btn btn-primary w-full"
+          disabled={!isValid || action.isPending}
+          onClick={() =>
+            action.run("create", async () => {
+              await onCreate(projectId, draft);
+              close();
+            })
+          }
+          className="btn btn-primary inline-flex w-full items-center justify-center gap-1.5"
         >
-          Save task
+          {action.isPending ? <Spinner /> : null}
+          {action.isPending ? "Creating…" : "Save task"}
         </button>
       </div>
     </Drawer>

@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import Drawer from "@/components/Drawer";
 import Modal from "@/components/Modal";
-import { Avatar, KeyValue, Pill, Section, StatStrip } from "@/components/ui";
+import { Avatar, KeyValue, Pill, Section, Spinner, StatStrip } from "@/components/ui";
+import { usePendingAction } from "@/lib/usePendingAction";
 
 function MemberRow({ member, onOpen, action }) {
   return (
@@ -30,6 +31,7 @@ function MemberRow({ member, onOpen, action }) {
 }
 
 export default function TeamPage({ store, onToggleAssignment }) {
+  const action = usePendingAction();
   const [selectedMember, setSelectedMember] = useState(null);
   // The server always sends at least the first project, so the pivot can start
   // on it rather than waiting for an effect to fill it in.
@@ -48,14 +50,18 @@ export default function TeamPage({ store, onToggleAssignment }) {
     (member) => !member.assignedProjectIds.includes(projectId),
   );
 
-  async function toggle(memberId, options = {}) {
-    const result = await onToggleAssignment(projectId, memberId, options);
+  // The member id doubles as the pending key so only the affected row reports
+  // progress, not the whole roster.
+  function toggle(memberId, options = {}) {
+    return action.run(memberId, async () => {
+      const result = await onToggleAssignment(projectId, memberId, options);
 
-    if (result?.status === "requires-confirmation") {
-      setPendingUnassign(result);
-    } else if (result?.status === "updated") {
-      setPendingUnassign(null);
-    }
+      if (result?.status === "requires-confirmation") {
+        setPendingUnassign(result);
+      } else if (result?.status === "updated") {
+        setPendingUnassign(null);
+      }
+    });
   }
 
   return (
@@ -100,10 +106,12 @@ export default function TeamPage({ store, onToggleAssignment }) {
                 action={
                   <button
                     type="button"
+                    disabled={action.isPending}
                     onClick={() => toggle(member.id)}
-                    className="btn btn-ghost h-[26px] px-2.5"
+                    className="btn btn-ghost inline-flex h-[26px] items-center gap-1.5 px-2.5 disabled:opacity-45"
                   >
-                    Unassign
+                    {action.pendingKey === member.id ? <Spinner /> : null}
+                    {action.pendingKey === member.id ? "Removing…" : "Unassign"}
                   </button>
                 }
               />
@@ -122,10 +130,12 @@ export default function TeamPage({ store, onToggleAssignment }) {
                 action={
                   <button
                     type="button"
+                    disabled={action.isPending}
                     onClick={() => toggle(member.id)}
-                    className="btn btn-primary h-[26px] px-2.5"
+                    className="btn btn-primary inline-flex h-[26px] items-center gap-1.5 px-2.5 disabled:opacity-45"
                   >
-                    Assign
+                    {action.pendingKey === member.id ? <Spinner /> : null}
+                    {action.pendingKey === member.id ? "Adding…" : "Assign"}
                   </button>
                 }
               />
@@ -190,10 +200,12 @@ export default function TeamPage({ store, onToggleAssignment }) {
             </button>
             <button
               type="button"
+              disabled={action.isPending}
               onClick={() => toggle(pendingUnassign.member.id, { force: true })}
-              className="btn btn-danger"
+              className="btn btn-danger inline-flex items-center gap-1.5"
             >
-              Unassign anyway
+              {action.isPending ? <Spinner /> : null}
+              {action.isPending ? "Removing…" : "Unassign anyway"}
             </button>
           </>
         }

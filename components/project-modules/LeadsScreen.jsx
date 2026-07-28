@@ -20,6 +20,7 @@ import {
 } from "@/components/project-modules/LeadDrawers";
 import { allowedLeadStatuses } from "@/components/project-modules/shared";
 import { usePageAction } from "@/context/PageAction";
+import { useBoardDrag } from "@/lib/useBoardDrag";
 import { cn, formatCurrency, formatDate } from "@/lib/utils";
 
 const VIEWS = [
@@ -119,10 +120,18 @@ function LeadTable({ leads, onOpen }) {
 }
 
 function LeadBoard({ leads, onOpen, onStatusChange }) {
-  const [draggedId, setDraggedId] = useState(null);
+  const drag = useBoardDrag({ onDrop: onStatusChange });
 
   return (
-    <div className="thin-scroll -mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
+    <div
+      ref={drag.scrollerRef}
+      className={cn(
+        "thin-scroll -mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0",
+        // While a card is held, the board must not also scroll vertically under
+        // the finger, or the drag fights the page.
+        drag.isDragging ? "touch-none select-none" : "",
+      )}
+    >
       <Frame
         className="grid-hairline min-w-[900px]"
         style={{ gridTemplateColumns: `repeat(${allowedLeadStatuses.length}, minmax(0, 1fr))` }}
@@ -137,19 +146,11 @@ function LeadBoard({ leads, onOpen, onStatusChange }) {
           return (
             <div
               key={status}
-              onDragOver={(event) => {
-                event.preventDefault();
-                event.dataTransfer.dropEffect = "move";
-              }}
-              onDrop={(event) => {
-                event.preventDefault();
-                const leadId = event.dataTransfer.getData("text/lead-id") || draggedId;
-                if (leadId) {
-                  onStatusChange(leadId, status);
-                }
-                setDraggedId(null);
-              }}
-              className="min-w-0 p-3.5"
+              ref={(node) => drag.registerColumn(status, node)}
+              className={cn(
+                "min-w-0 p-3.5 transition-colors",
+                drag.isDragging && drag.overColumn === status ? "bg-shade" : "",
+              )}
             >
               <div className="flex items-baseline justify-between gap-2 border-b border-edge pb-2">
                 <span className="label label-ink font-semibold">{status}</span>
@@ -165,16 +166,16 @@ function LeadBoard({ leads, onOpen, onStatusChange }) {
                 {items.map((lead) => (
                   <div
                     key={lead.id}
-                    draggable
                     role="button"
                     tabIndex={0}
-                    onDragStart={(event) => {
-                      setDraggedId(lead.id);
-                      event.dataTransfer.setData("text/lead-id", lead.id);
-                      event.dataTransfer.effectAllowed = "move";
+                    {...drag.dragHandleProps(lead.id)}
+                    // A press that never travelled far enough to become a drag is
+                    // still a tap, so opening the record keeps working on touch.
+                    onClick={() => {
+                      if (!drag.isDragging) {
+                        onOpen(lead);
+                      }
                     }}
-                    onDragEnd={() => setDraggedId(null)}
-                    onClick={() => onOpen(lead)}
                     onKeyDown={(event) => {
                       if (event.key === "Enter" || event.key === " ") {
                         event.preventDefault();
@@ -182,8 +183,8 @@ function LeadBoard({ leads, onOpen, onStatusChange }) {
                       }
                     }}
                     className={cn(
-                      "cursor-pointer border border-line bg-white p-3 transition-colors hover:border-ink",
-                      draggedId === lead.id ? "opacity-50" : "",
+                      "cursor-grab border border-line bg-white p-3 transition-colors hover:border-ink",
+                      drag.draggingId === lead.id ? "opacity-40" : "",
                     )}
                   >
                     <div className="truncate text-[13px] font-semibold text-ink">

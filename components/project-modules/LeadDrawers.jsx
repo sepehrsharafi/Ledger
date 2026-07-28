@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import Drawer from "@/components/Drawer";
-import { AssigneeSelect, Chip, Field, KeyValue, Section } from "@/components/ui";
+import { AssigneeSelect, Chip, Field, KeyValue, Section, Spinner } from "@/components/ui";
 import { allowedLeadStatuses } from "@/components/project-modules/shared";
+import { usePendingAction } from "@/lib/usePendingAction";
 import { formatCurrency, formatDate } from "@/lib/utils";
 
 const COMPOSER_FIELDS = [
@@ -26,6 +27,8 @@ export function LeadDetailDrawer({
   onAddNote,
   onDelete,
 }) {
+  const statusAction = usePendingAction();
+  const deleteAction = usePendingAction();
   const [note, setNote] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
@@ -65,13 +68,23 @@ export function LeadDetailDrawer({
             </KeyValue>
           </div>
 
+          {/*
+            The status control reports its own progress: the chip you pressed
+            shows a spinner and the rest go quiet until the change has landed.
+            Nothing outside this section is blocked, so the timeline below stays
+            readable while the write is in flight.
+          */}
           <Section title="Status" bodyClassName="pt-3">
             <div className="flex flex-wrap gap-1.5">
               {allowedLeadStatuses.map((status) => (
                 <Chip
                   key={status}
                   active={lead.status === status}
-                  onClick={() => onStatusChange(lead.id, status)}
+                  busy={statusAction.pendingKey === status}
+                  disabled={statusAction.isPending}
+                  onClick={() =>
+                    statusAction.run(status, () => onStatusChange(lead.id, status))
+                  }
                 >
                   {status}
                 </Chip>
@@ -118,13 +131,17 @@ export function LeadDetailDrawer({
               </button>
               <button
                 type="button"
-                onClick={async () => {
-                  await onDelete(lead.id);
-                  onClose();
-                }}
-                className="btn btn-danger"
+                disabled={deleteAction.isPending}
+                onClick={() =>
+                  deleteAction.run("delete", async () => {
+                    await onDelete(lead.id);
+                    onClose();
+                  })
+                }
+                className="btn btn-danger inline-flex items-center gap-1.5"
               >
-                Delete lead
+                {deleteAction.isPending ? <Spinner /> : null}
+                {deleteAction.isPending ? "Deleting…" : "Delete lead"}
               </button>
             </div>
           </Section>

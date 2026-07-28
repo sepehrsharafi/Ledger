@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import Modal from "@/components/Modal";
-import { Avatar, Pill, Section, StatStrip } from "@/components/ui";
+import { Avatar, Pill, Section, Spinner, StatStrip } from "@/components/ui";
+import { usePendingAction } from "@/lib/usePendingAction";
 
 function MemberRow({ member, action }) {
   return (
@@ -19,6 +20,7 @@ function MemberRow({ member, action }) {
 }
 
 export default function ProjectTeamScreen({ bundle, store, onToggleAssignment }) {
+  const action = usePendingAction();
   const [pendingUnassign, setPendingUnassign] = useState(null);
 
   const assigned = store.teamMembers.filter((member) =>
@@ -28,15 +30,19 @@ export default function ProjectTeamScreen({ bundle, store, onToggleAssignment })
     (member) => !member.assignedProjectIds.includes(bundle.project.id),
   );
 
-  // Unassigning someone who still owns tasks needs an explicit confirmation.
-  async function toggle(memberId, options = {}) {
-    const result = await onToggleAssignment(memberId, options);
+  // Unassigning someone who still owns tasks needs an explicit confirmation. The
+  // member id doubles as the pending key, so only the row being changed reports
+  // progress rather than the whole roster.
+  function toggle(memberId, options = {}) {
+    return action.run(memberId, async () => {
+      const result = await onToggleAssignment(memberId, options);
 
-    if (result?.status === "requires-confirmation") {
-      setPendingUnassign(result);
-    } else if (result?.status === "updated") {
-      setPendingUnassign(null);
-    }
+      if (result?.status === "requires-confirmation") {
+        setPendingUnassign(result);
+      } else if (result?.status === "updated") {
+        setPendingUnassign(null);
+      }
+    });
   }
 
   return (
@@ -58,10 +64,12 @@ export default function ProjectTeamScreen({ bundle, store, onToggleAssignment })
               action={
                 <button
                   type="button"
+                  disabled={action.isPending}
                   onClick={() => toggle(member.id)}
-                  className="btn btn-ghost h-[26px] px-2.5"
+                  className="btn btn-ghost inline-flex h-[26px] items-center gap-1.5 px-2.5 disabled:opacity-45"
                 >
-                  Unassign
+                  {action.pendingKey === member.id ? <Spinner /> : null}
+                  {action.pendingKey === member.id ? "Removing…" : "Unassign"}
                 </button>
               }
             />
@@ -81,10 +89,12 @@ export default function ProjectTeamScreen({ bundle, store, onToggleAssignment })
               action={
                 <button
                   type="button"
+                  disabled={action.isPending}
                   onClick={() => toggle(member.id)}
-                  className="btn btn-primary h-[26px] px-2.5"
+                  className="btn btn-primary inline-flex h-[26px] items-center gap-1.5 px-2.5 disabled:opacity-45"
                 >
-                  Assign
+                  {action.pendingKey === member.id ? <Spinner /> : null}
+                  {action.pendingKey === member.id ? "Adding…" : "Assign"}
                 </button>
               }
             />

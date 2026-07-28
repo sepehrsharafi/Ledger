@@ -322,20 +322,57 @@ export function Segmented({ options = [], value, onChange, className = "" }) {
 }
 
 /** Filter chip row — used for statuses, channels, owners and assignees. */
-export function Chip({ active, children, className = "", ...rest }) {
+/**
+ * A one-line progress mark. Sized in `em` so it matches whatever text it sits
+ * beside, and `currentColor` so it works on both the light and filled variants of
+ * a control without being told which it is on.
+ */
+export function Spinner({ className = "" }) {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      aria-hidden="true"
+      className={cn("h-[1em] w-[1em] shrink-0 animate-spin", className)}
+    >
+      <circle
+        cx="8"
+        cy="8"
+        r="6"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeOpacity="0.25"
+      />
+      <path
+        d="M14 8a6 6 0 0 0-6-6"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+export function Chip({ active, busy = false, children, className = "", ...rest }) {
   return (
     <button
       type="button"
       aria-pressed={Boolean(active)}
+      aria-busy={busy || undefined}
       className={cn(
         "label inline-flex h-[26px] items-center gap-1.5 border px-2 transition-colors",
         active
           ? "border-accent bg-accent text-white"
           : "border-line bg-white hover:border-ink hover:text-ink",
+        // Dim the controls that are not the one being waited on, so the pending
+        // chip stays the only thing drawing the eye.
+        "disabled:cursor-default disabled:opacity-45 aria-busy:opacity-100",
         className,
       )}
       {...rest}
     >
+      {busy ? <Spinner /> : null}
       {children}
     </button>
   );
