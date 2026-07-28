@@ -12,7 +12,7 @@ import { resolveRouteMeta } from "@/lib/pageMeta";
  * swaps the content area — and while the next route is still in flight that
  * area shows its skeleton instead of the page the user just left.
  */
-export default function WorkspaceShell({ children }) {
+export default function WorkspaceShell({ shellData, children }) {
   const pathname = usePathname();
   const { pendingPath } = useRouteTransition();
 
@@ -37,6 +37,7 @@ export default function WorkspaceShell({ children }) {
       projectId={meta.projectId}
       module={meta.module}
       action={meta.action}
+      shellData={shellData}
       hidePageHeading={meta.hidePageHeading}
     >
       {content}

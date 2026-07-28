@@ -1,5 +1,5 @@
-import RouteSkeleton from "@/components/RouteSkeleton";
+import { ModuleSkeleton } from "@/components/Skeleton";
 
 export default function ClientViewLoading() {
-  return <RouteSkeleton pathname="/projects/_/client-view" />;
+  return <ModuleSkeleton cards={4} rows={3} />;
 }

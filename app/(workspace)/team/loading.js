@@ -1,5 +1,5 @@
-import RouteSkeleton from "@/components/RouteSkeleton";
+import { ModuleSkeleton } from "@/components/Skeleton";
 
 export default function TeamLoading() {
-  return <RouteSkeleton pathname="/team" />;
+  return <ModuleSkeleton cards={3} rows={6} />;
 }

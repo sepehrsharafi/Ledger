@@ -10,9 +10,16 @@ import {
   validatePayload,
 } from "./catalog.js";
 
+// Values reach these either as driver `Date` objects or, when a row came back
+// inside a json aggregate, as Postgres date/timestamp strings. Both must
+// normalize to the same shape or records would differ by query style.
 function formatTimestamp(value) {
   if (value instanceof Date) {
     return value.toISOString();
+  }
+  if (typeof value === "string" && value.length > 10) {
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? value : parsed.toISOString();
   }
   return value;
 }
@@ -20,6 +27,9 @@ function formatTimestamp(value) {
 function formatDate(value) {
   if (value instanceof Date) {
     return value.toISOString().slice(0, 10);
+  }
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}/.test(value)) {
+    return value.slice(0, 10);
   }
   return value;
 }
@@ -137,6 +147,56 @@ function buildFilterClause(collection, filters = {}, startIndex = 1) {
       .map(([field], index) => `${config.columns[field]} = $${startIndex + index}`)
       .join(" and ")}`,
     params: entries.map(([, value]) => value),
+  };
+}
+
+/**
+ * Reads the whole overview in a single round trip.
+ *
+ * Measured against the Neon pooler: a parameterized query costs ~250ms and
+ * several of them do not pipeline — eight cost ~2s, the same eight collapsed into
+ * one json query cost about as much as one. That is why this view is hand-written
+ * SQL instead of eight `getCollectionRecords` calls. Ordering and limiting happen
+ * in the database, and rows still come back through the catalog's mappers so the
+ * records are identical in shape to every other read.
+ */
+export async function getProjectOverviewRows(projectId) {
+  const [row] = await queryRows(
+    `select
+       (select row_to_json(p) from projects p where p.id = $1) as project,
+       (select coalesce(json_agg(row_to_json(k)), '[]'::json)
+          from kpi_snapshots k where k.project_id = $1) as kpis,
+       (select coalesce(json_agg(row_to_json(s)), '[]'::json)
+          from (select * from time_series
+                 where project_id = $1 order by month_start asc) s) as series,
+       (select coalesce(json_agg(row_to_json(c)), '[]'::json)
+          from campaigns c where c.project_id = $1) as campaigns,
+       (select coalesce(json_agg(row_to_json(t)), '[]'::json)
+          from (select * from tasks
+                 where project_id = $1 order by due_date asc limit 6) t) as upcoming_tasks,
+       (select coalesce(json_agg(row_to_json(a)), '[]'::json)
+          from (select * from lead_activities
+                 where project_id = $1 order by created_at desc limit 5) a) as recent_activity,
+       (select coalesce(json_object_agg(status, total), '{}'::json)
+          from (select status, count(*)::int as total from leads
+                 where project_id = $1 group by status) g) as lead_status_counts,
+       (select coalesce(json_agg(row_to_json(m)), '[]'::json)
+          from team_members m) as team_members`,
+    [projectId],
+  );
+
+  const list = (collection, rows) =>
+    (rows || []).map((item) => mapRowToRecord(collection, item));
+
+  return {
+    project: row.project ? mapRowToRecord("projects", row.project) : null,
+    kpis: list("kpiSnapshots", row.kpis),
+    series: list("timeSeries", row.series),
+    campaigns: list("campaigns", row.campaigns),
+    upcomingTasks: list("tasks", row.upcoming_tasks),
+    recentActivity: list("leadActivities", row.recent_activity),
+    leadStatusCounts: row.lead_status_counts || {},
+    teamMembers: list("teamMembers", row.team_members),
   };
 }
 

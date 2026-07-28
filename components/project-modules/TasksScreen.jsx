@@ -84,6 +84,10 @@ export default function TasksScreen({
 
   const tasks = bundle.tasks || [];
 
+  // Only people who actually own a task here. Listing the whole roster offered
+  // filters that could only ever return nothing.
+  const assignees = [...new Set(tasks.map((task) => task.assignee).filter(Boolean))].sort();
+
   if (!tasks.length) {
     return (
       <EmptyState
@@ -103,7 +107,7 @@ export default function TasksScreen({
       <div className="space-y-5">
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="label mr-1">Assignee</span>
-          {["All", ...store.teamMembers.map((member) => member.name)].map((name) => (
+          {["All", ...assignees].map((name) => (
             <Chip
               key={name}
               active={assigneeFilter === name}

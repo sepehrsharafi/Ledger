@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Drawer from "@/components/Drawer";
-import { Chip, Field, KeyValue, Section } from "@/components/ui";
+import { AssigneeSelect, Chip, Field, KeyValue, Section } from "@/components/ui";
 import { allowedLeadStatuses } from "@/components/project-modules/shared";
 import { formatCurrency, formatDate } from "@/lib/utils";
 
@@ -186,15 +186,11 @@ export function LeadComposerDrawer({ open, onClose, onCreate, project, teamMembe
             </select>
           </Field>
           <Field label="Owner" className="sm:col-span-2">
-            <select
+            <AssigneeSelect
               value={draft.assignedTeamMember}
-              onChange={(event) => update("assignedTeamMember", event.target.value)}
-              className="field"
-            >
-              {teamMembers.map((member) => (
-                <option key={member.id}>{member.name}</option>
-              ))}
-            </select>
+              onChange={(name) => update("assignedTeamMember", name)}
+              members={teamMembers}
+            />
           </Field>
         </div>
         <button
@@ -223,6 +219,6 @@ function emptyDraft(teamMembers = []) {
     status: "New",
     estimatedValue: "",
     capturedFrom: "",
-    assignedTeamMember: teamMembers[0]?.name || "Alex Morgan",
+    assignedTeamMember: teamMembers[0]?.name || "",
   };
 }

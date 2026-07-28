@@ -188,7 +188,10 @@ export default function ReportsScreen({ bundle, onUpdateReport }) {
     );
   }
 
-  const update = (updater) => onUpdateReport(bundle.project.id, updater);
+  // The updater is resolved here: a function cannot be handed to a Server Action,
+  // so the tabs keep their `onUpdate(config => next)` shape and the plain result
+  // is what travels.
+  const update = (updater) => onUpdateReport(updater(report));
 
   return (
     <div className="space-y-7">

@@ -8,7 +8,7 @@ import { useAppContext } from "@/context/AppContext";
 import { usePageActionHandler } from "@/context/PageAction";
 import { useRouteTransition } from "@/context/RouteTransition";
 import { buildSidebarNav } from "@/lib/navigation";
-import { useShellData } from "@/lib/useLedgerData";
+import { useShellData } from "@/lib/useShellData";
 
 /** Closes a popover when the pointer lands outside any of the given refs. */
 function useDismissOnOutsideClick(refs, close) {
@@ -34,6 +34,7 @@ export default function AppShell({
   projectId,
   module,
   action,
+  shellData,
   hidePageHeading = false,
   children,
 }) {
@@ -43,7 +44,8 @@ export default function AppShell({
   // Treat the destination as current the moment it is clicked, not once it commits.
   const pathname = pendingPath || committedPathname;
   const { isAuthenticated, logout, viewerRole } = useAppContext();
-  const { projects, teamMembers, unreadCount, navCounts } = useShellData();
+  const { projects, teamMembers, unreadCount, navCounts, notifications } =
+    useShellData(shellData);
   const onAction = usePageActionHandler();
 
   const [navOpen, setNavOpen] = useState(false);
@@ -131,6 +133,8 @@ export default function AppShell({
         <Header
           crumbs={crumbs}
           unreadCount={unreadCount}
+          notifications={notifications}
+          onOpenNotification={goTo}
           action={action}
           onAction={onAction || undefined}
           onOpenNav={() => setNavOpen(true)}

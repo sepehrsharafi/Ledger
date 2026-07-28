@@ -96,3 +96,14 @@ export function ModuleSkeleton({ cards = 4, rows = 6, board = false }) {
     </div>
   );
 }
+
+/** The dashboard's composite shape, shared by its `loading.js` and its route. */
+export function OverviewSkeleton() {
+  return (
+    <div className="space-y-8">
+      <StripSkeleton cells={4} />
+      <PanelsSkeleton panels={1} rows={3} />
+      <CardGridSkeleton count={3} />
+    </div>
+  );
+}

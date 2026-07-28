@@ -3,11 +3,9 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import ProjectFormModal from "@/components/ProjectFormModal";
-import { CardGridSkeleton } from "@/components/Skeleton";
 import { Pill } from "@/components/ui";
 import { usePageAction } from "@/context/PageAction";
 import { useRouteTransition } from "@/context/RouteTransition";
-import { useProjectsHubData } from "@/lib/useLedgerData";
 
 function ProjectCard({ project, onOpen }) {
   return (
@@ -59,10 +57,9 @@ function ProjectCard({ project, onOpen }) {
   );
 }
 
-export default function ProjectsHubPage() {
+export default function ProjectsHubPage({ projectCards, onCreateProject }) {
   const router = useRouter();
   const { startNavigation } = useRouteTransition();
-  const { addProject, projectCards, isLoading } = useProjectsHubData();
   const [modalOpen, setModalOpen] = useState(false);
 
   usePageAction(() => setModalOpen(true));
@@ -75,24 +72,20 @@ export default function ProjectsHubPage() {
 
   return (
     <>
-      {isLoading ? (
-        <CardGridSkeleton count={3} />
-      ) : (
-        <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-          {projectCards.map((project) => (
-            <ProjectCard
-              key={project.id}
-              project={project}
-              onOpen={() => openProject(project.id)}
-            />
-          ))}
-        </div>
-      )}
+      <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+        {projectCards.map((project) => (
+          <ProjectCard
+            key={project.id}
+            project={project}
+            onOpen={() => openProject(project.id)}
+          />
+        ))}
+      </div>
 
       <ProjectFormModal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
-        onSubmit={async (form) => openProject(await addProject(form))}
+        onSubmit={async (form) => openProject(await onCreateProject(form))}
       />
     </>
   );

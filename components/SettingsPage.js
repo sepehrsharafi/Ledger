@@ -2,7 +2,6 @@
 
 import { Avatar, Frame, Section, Toggle } from "@/components/ui";
 import { AVATAR_FILL } from "@/lib/palette";
-import { useSettingsData } from "@/lib/useLedgerData";
 
 const NOTIFICATION_COPY = {
   approvals: "When an asset needs your decision.",
@@ -22,9 +21,11 @@ function ToggleRow({ title, description, checked, onChange }) {
   );
 }
 
-export default function SettingsPage() {
-  const { store, toggleIntegration, toggleNotification } = useSettingsData();
-  const settings = store.agencySettings;
+export default function SettingsPage({
+  settings,
+  onToggleIntegration,
+  onToggleNotification,
+}) {
 
   return (
     <div className="grid gap-9 xl:grid-cols-2">
@@ -55,7 +56,7 @@ export default function SettingsPage() {
               title={key}
               description={NOTIFICATION_COPY[key] || "Visual-only setting in this demo."}
               checked={enabled}
-              onChange={() => toggleNotification(key)}
+              onChange={() => onToggleNotification(key)}
             />
           ))}
         </Section>
@@ -77,7 +78,7 @@ export default function SettingsPage() {
               title={integration.name}
               description={integration.connected ? "Connected" : "Not connected"}
               checked={integration.connected}
-              onChange={() => toggleIntegration(integration.id)}
+              onChange={() => onToggleIntegration(integration.id)}
             />
           ))}
         </Section>

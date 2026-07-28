@@ -2,8 +2,22 @@
 
 import EmptyState from "@/components/EmptyState";
 import OverviewDashboard from "@/components/dashboard/OverviewDashboard";
+import { usePageAction } from "@/context/PageAction";
+import {
+  buildOverviewCsv,
+  downloadCsv,
+  overviewCsvFilename,
+} from "@/lib/exportReport";
 
 export default function OverviewScreen({ bundle, recentActivity, store }) {
+  // Claims the header's "Export report" button while this screen is mounted.
+  usePageAction(() => {
+    if (!bundle?.series?.length) {
+      return;
+    }
+    downloadCsv(overviewCsvFilename(bundle), buildOverviewCsv(bundle));
+  });
+
   if (!bundle?.series?.length) {
     return (
       <EmptyState

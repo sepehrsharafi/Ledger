@@ -65,8 +65,16 @@ export default function LoginPage() {
         </div>
       </div>
 
-      {/* Editorial panel — below on mobile, left on desktop. */}
-      <div className="order-2 flex w-full flex-col justify-between gap-12 bg-ink px-8 py-12 text-white sm:px-12 lg:order-1 lg:min-h-screen lg:w-1/2 lg:px-16 lg:py-16">
+      {/*
+        Editorial panel — below on mobile, left on desktop.
+
+        `grow` matters on mobile: the two panels stack, and on a tall phone their
+        combined height falls short of the `min-h-screen` container, leaving a
+        strip of white under this one. Growing lets it take up the slack so the
+        ink block reaches the bottom of the screen. It is turned off at `lg`,
+        where the panels are side by side and each already claims half the width.
+      */}
+      <div className="order-2 flex w-full grow flex-col justify-between gap-12 bg-ink px-8 py-12 text-white sm:px-12 lg:order-1 lg:min-h-screen lg:w-1/2 lg:grow-0 lg:px-16 lg:py-16">
         <div className="label flex items-center gap-4 text-white/50">
           Ledger
           <span className="h-px flex-1 bg-white/20" />

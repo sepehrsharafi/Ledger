@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Drawer from "@/components/Drawer";
-import { Field } from "@/components/ui";
+import { AssigneeSelect, Field } from "@/components/ui";
 import {
   calendarStatuses,
   inputDateValue,
@@ -52,15 +52,11 @@ function EventFields({ value, onChange, teamMembers }) {
         />
       </Field>
       <Field label="Assignee">
-        <select
+        <AssigneeSelect
           value={value.assignee}
-          onChange={(event) => onChange({ assignee: event.target.value })}
-          className="field"
-        >
-          {teamMembers.map((member) => (
-            <option key={member.id}>{member.name}</option>
-          ))}
-        </select>
+          onChange={(assignee) => onChange({ assignee })}
+          members={teamMembers}
+        />
       </Field>
     </div>
   );
@@ -137,6 +133,6 @@ function emptyDraft(teamMembers = []) {
     channel: "Social",
     date: inputDateValue(),
     status: "Draft",
-    assignee: teamMembers[0]?.name || "Alex Morgan",
+    assignee: teamMembers[0]?.name || "",
   };
 }

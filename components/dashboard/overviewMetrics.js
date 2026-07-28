@@ -194,12 +194,17 @@ export function getChannelLegend(bundle) {
 }
 
 export function getPipelineStages(bundle) {
-  const leads = bundle.leads || [];
-  const total = bundle.leadCount ?? leads.length;
-  const counts = leads.reduce((acc, lead) => {
-    acc[lead.status] = (acc[lead.status] || 0) + 1;
-    return acc;
-  }, {});
+  // Counts come straight from the database as an aggregate. The lead-record
+  // fallback stays for any caller that still hands over the full list.
+  const counts =
+    bundle.leadStatusCounts ||
+    (bundle.leads || []).reduce((acc, lead) => {
+      acc[lead.status] = (acc[lead.status] || 0) + 1;
+      return acc;
+    }, {});
+  const total =
+    bundle.leadCount ??
+    Object.values(counts).reduce((sum, count) => sum + count, 0);
 
   return PIPELINE_STAGES.map((label, index) => {
     const stage = { label, count: counts[label] || 0 };

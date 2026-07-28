@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Drawer from "@/components/Drawer";
-import { Field } from "@/components/ui";
+import { AssigneeSelect, Field } from "@/components/ui";
 import {
   inputDateValue,
   taskColumns,
@@ -59,15 +59,11 @@ function TaskFields({ value, onChange, teamMembers }) {
         />
       </Field>
       <Field label="Assignee">
-        <select
+        <AssigneeSelect
           value={value.assignee}
-          onChange={(event) => onChange({ assignee: event.target.value })}
-          className="field"
-        >
-          {teamMembers.map((member) => (
-            <option key={member.id}>{member.name}</option>
-          ))}
-        </select>
+          onChange={(assignee) => onChange({ assignee })}
+          members={teamMembers}
+        />
       </Field>
     </div>
   );
@@ -138,7 +134,7 @@ function emptyDraft(teamMembers = []) {
     title: "",
     description: "",
     column: "To Do",
-    assignee: teamMembers[0]?.name || "Alex Morgan",
+    assignee: teamMembers[0]?.name || "",
     dueDate: inputDateValue(),
     priority: "Medium",
   };

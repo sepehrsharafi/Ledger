@@ -1,5 +1,5 @@
-import RouteSkeleton from "@/components/RouteSkeleton";
+import { CardGridSkeleton } from "@/components/Skeleton";
 
 export default function ProjectsHubLoading() {
-  return <RouteSkeleton pathname="/projects" />;
+  return <CardGridSkeleton count={3} />;
 }

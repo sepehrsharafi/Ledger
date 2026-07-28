@@ -1,5 +1,5 @@
-import RouteSkeleton from "@/components/RouteSkeleton";
+import { PanelsSkeleton } from "@/components/Skeleton";
 
 export default function SettingsLoading() {
-  return <RouteSkeleton pathname="/settings" />;
+  return <PanelsSkeleton panels={2} rows={4} />;
 }

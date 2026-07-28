@@ -14,7 +14,17 @@ import { usePageAction } from "@/context/PageAction";
 import { cn, formatDate, toLocalDateKey } from "@/lib/utils";
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const INLINE_LIMIT = 3;
+
+/**
+ * Cells are a fixed height so a busy day never stretches its whole week row —
+ * that bulge was the real problem, not unreachable items. `INLINE_LIMIT` is
+ * whatever fits in `CELL_HEIGHT` alongside the date and the overflow link; the
+ * two constants have to be changed together or chips would clip.
+ */
+const INLINE_LIMIT = 2;
+// 140px is what two chips, the date and the overflow link actually measure at —
+// 132px clipped the link by 2px.
+const CELL_HEIGHT = "h-[140px]";
 
 // The demo data is anchored to June 2026, so that is where the calendar opens.
 const ANCHOR_MONTH = new Date("2026-06-01T00:00:00");
@@ -174,14 +184,15 @@ export default function CalendarScreen({
                 <div
                   key={dateKey || `blank-${index}`}
                   className={cn(
-                    "min-h-[124px] p-2",
+                    "flex flex-col overflow-hidden p-2",
+                    CELL_HEIGHT,
                     day ? "" : "bg-shade",
                   )}
                 >
                   {day ? (
                     <>
                       <div className="num px-1 text-[11px] text-muted">{day.getDate()}</div>
-                      <div className="mt-2 space-y-1.5">
+                      <div className="mt-2 flex min-h-0 flex-col gap-1.5">
                         {dayEvents.slice(0, INLINE_LIMIT).map((event) => (
                           <EventChip
                             key={event.id}
@@ -198,7 +209,7 @@ export default function CalendarScreen({
                                 events: dayEvents,
                               })
                             }
-                            className="label w-full px-1 py-0.5 text-left text-accent"
+                            className="label w-full px-1 py-0.5 text-left text-accent hover:underline"
                           >
                             +{overflow} more
                           </button>

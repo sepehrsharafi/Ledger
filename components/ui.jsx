@@ -254,10 +254,50 @@ export function Avatar({ name = "", color, variant = "solid", className = "" }) 
 
 /* --- Controls -------------------------------------------------------------- */
 
-/** Segmented switch: the active option is filled ink, the rest stay plain. */
+/**
+ * A person picker limited to the project's roster.
+ *
+ * `current` is kept as an option even when that person is no longer on the
+ * project — an existing record must never be silently reassigned just because
+ * someone was unassigned after it was created. Such a name is marked so the
+ * stale value is visible rather than looking like a normal choice.
+ */
+export function AssigneeSelect({ value, onChange, members = [], ...rest }) {
+  const names = members.map((member) => member.name);
+  const isStale = value && !names.includes(value);
+
+  return (
+    <select
+      value={value ?? ""}
+      onChange={(event) => onChange(event.target.value)}
+      className="field"
+      {...rest}
+    >
+      {names.length === 0 && !isStale ? (
+        <option value="">No one assigned to this project</option>
+      ) : null}
+      {isStale ? <option value={value}>{value} — no longer on project</option> : null}
+      {names.map((name) => (
+        <option key={name} value={name}>
+          {name}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+/**
+ * Segmented switch: the active option is filled ink, the rest stay plain.
+ *
+ * `w-fit` is load-bearing. CSS blockifies `inline-flex` on a flex item, so inside
+ * a `flex-col` parent this control would stretch to the full row width and its
+ * border would run far past the buttons. An explicit cross-size defeats the
+ * default `align-items: stretch`; `self-start` would fix the width too but would
+ * also drag it out of vertical centre in the row layouts that use it.
+ */
 export function Segmented({ options = [], value, onChange, className = "" }) {
   return (
-    <div className={cn("inline-flex border border-line", className)}>
+    <div className={cn("inline-flex w-fit border border-line", className)}>
       {options.map((option) => {
         const key = option.value ?? option;
         const active = key === value;

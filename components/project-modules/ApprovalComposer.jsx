@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Drawer from "@/components/Drawer";
-import { Field } from "@/components/ui";
+import { AssigneeSelect, Field } from "@/components/ui";
 import { SERIES } from "@/lib/palette";
 
 const REQUEST_TYPES = ["Creative", "Copy", "Budget", "Strategy", "Video"];
@@ -55,15 +55,11 @@ export default function ApprovalComposer({
             </select>
           </Field>
           <Field label="Submitted by">
-            <select
+            <AssigneeSelect
               value={draft.submittedBy}
-              onChange={(event) => update({ submittedBy: event.target.value })}
-              className="field"
-            >
-              {teamMembers.map((member) => (
-                <option key={member.id}>{member.name}</option>
-              ))}
-            </select>
+              onChange={(submittedBy) => update({ submittedBy })}
+              members={teamMembers}
+            />
           </Field>
           {TEXT_AREAS.map((field) => (
             <Field key={field.key} label={field.label} className="sm:col-span-2">
@@ -110,7 +106,7 @@ function emptyDraft(teamMembers = []) {
   return {
     title: "",
     requestType: "Creative",
-    submittedBy: teamMembers[0]?.name || "Alex Morgan",
+    submittedBy: teamMembers[0]?.name || "",
     summary: "",
     details: "",
     pros: "",

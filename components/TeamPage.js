@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from "react";
 import Drawer from "@/components/Drawer";
 import Modal from "@/components/Modal";
 import { Avatar, KeyValue, Pill, Section, StatStrip } from "@/components/ui";
-import { useTeamPageData } from "@/lib/useLedgerData";
 
 function MemberRow({ member, onOpen, action }) {
   return (
@@ -30,17 +29,12 @@ function MemberRow({ member, onOpen, action }) {
   );
 }
 
-export default function TeamPage() {
-  const { store, toggleTeamMemberAssignment } = useTeamPageData();
+export default function TeamPage({ store, onToggleAssignment }) {
   const [selectedMember, setSelectedMember] = useState(null);
-  const [projectId, setProjectId] = useState("");
+  // The server always sends at least the first project, so the pivot can start
+  // on it rather than waiting for an effect to fill it in.
+  const [projectId, setProjectId] = useState(store.projects[0]?.id || "");
   const [pendingUnassign, setPendingUnassign] = useState(null);
-
-  useEffect(() => {
-    if (!projectId && store.projects[0]?.id) {
-      setProjectId(store.projects[0].id);
-    }
-  }, [projectId, store.projects]);
 
   const project = useMemo(
     () => store.projects.find((item) => item.id === projectId),
@@ -55,7 +49,7 @@ export default function TeamPage() {
   );
 
   async function toggle(memberId, options = {}) {
-    const result = await toggleTeamMemberAssignment(projectId, memberId, options);
+    const result = await onToggleAssignment(projectId, memberId, options);
 
     if (result?.status === "requires-confirmation") {
       setPendingUnassign(result);

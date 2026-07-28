@@ -1,5 +1,6 @@
-import RouteSkeleton from "@/components/RouteSkeleton";
+import { BoardSkeleton } from "@/components/Skeleton";
 
+// The route owns its own placeholder now — no pathname registry to look it up in.
 export default function TasksLoading() {
-  return <RouteSkeleton pathname="/projects/_/tasks" />;
+  return <BoardSkeleton />;
 }
